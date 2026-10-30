@@ -567,7 +567,14 @@ export class Viewer {
       canvas.width = Math.floor(viewport.width * ratio);
       canvas.height = Math.floor(viewport.height * ratio);
       const lib = await pdfjs();
-      const task = proxy.render({ canvas, viewport, transform: ratio === 1 ? undefined : [ratio, 0, 0, ratio, 0, 0], annotationMode: lib.AnnotationMode.ENABLE_FORMS });
+      // The fields are drawn by the viewer: PDF.js leaves them out, and the looks of checkboxes (checked and not) go to canvases of their own, not over the page.
+      const task = proxy.render({
+        canvas,
+        viewport,
+        transform: ratio === 1 ? undefined : [ratio, 0, 0, ratio, 0, 0],
+        annotationMode: lib.AnnotationMode.ENABLE_FORMS,
+        annotationCanvasMap: new Map(),
+      });
       view.drawing = task;
       await task.promise;
       if (this.keyOf(view) !== key) return;

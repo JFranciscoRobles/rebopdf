@@ -1,7 +1,7 @@
 // A PDF opened: its pages, what it says of itself and its form fields, read
 // with pdf-lib. The bytes are kept as they came, to be drawn and saved from.
 
-import { PDFCheckBox, PDFDocument, type PDFField, PDFDropdown, PDFOptionList, PDFRadioGroup, type PDFRef, PDFTextField } from '@cantoo/pdf-lib';
+import { PDFCheckBox, PDFDocument, type PDFField, PDFDropdown, PDFHexString, PDFName, PDFOptionList, PDFRadioGroup, type PDFRef, PDFString, PDFTextField } from '@cantoo/pdf-lib';
 import { type Field, type Page, type Pdf, PdfError, type Rect } from './types';
 
 let counter = 0;
@@ -24,6 +24,21 @@ export async function loadDocument(bytes: Uint8Array, password?: string): Promis
     const text = error instanceof Error ? `${error.name} ${error.message}` : String(error);
     if (/encrypt/i.test(text)) throw new PdfError('encrypted', password ? 'The password is not the one of this PDF.' : 'This PDF is protected by a password.');
     throw new PdfError('invalid', `This is not a PDF that can be read: ${error instanceof Error ? error.message : text}`);
+  }
+}
+
+/**
+ * The form of a document. An XFA form beside it (as forms of Adobe's have)
+ * is taken out first: what is filled goes in the AcroForm, which every reader
+ * reads, and an XFA left behind would show readers that read it what it held
+ * before.
+ */
+export function formOf(doc: PDFDocument): ReturnType<PDFDocument['getForm']> | undefined {
+  try {
+    doc.catalog.getAcroForm()?.dict.delete(PDFName.of('XFA'));
+    return doc.getForm();
+  } catch {
+    return undefined;
   }
 }
 
@@ -54,13 +69,7 @@ export async function readSource(source: string, bytes: Uint8Array, password?: s
   const pageOf = (ref: PDFRef | undefined, widget: string) => (ref && refs.get(ref.toString())) ?? annots.get(widget);
 
   const fields: Field[] = [];
-  let form: ReturnType<PDFDocument['getForm']> | undefined;
-  try {
-    form = doc.getForm();
-  } catch {
-    form = undefined;
-  }
-  for (const field of form?.getFields() ?? []) {
+  for (const field of formOf(doc)?.getFields() ?? []) {
     const read = readField(field);
     if (!read) continue;
     const widgets: Field['widgets'] = [];
@@ -75,7 +84,10 @@ export async function readSource(source: string, bytes: Uint8Array, password?: s
     });
     if (!widgets.length) continue;
     const name = field.getName();
-    fields.push({ id: `${source}/${name}`, source, name, ...read, readOnly: field.isReadOnly() || undefined, required: field.isRequired() || undefined, widgets });
+    // What the field is called for a person, as the PDF says it (its tooltip), when it says so.
+    const told = field.acroField.dict.lookup(PDFName.of('TU'));
+    const label = told instanceof PDFString || told instanceof PDFHexString ? told.decodeText().trim() : '';
+    fields.push({ id: `${source}/${name}`, source, name, ...(label ? { label } : {}), ...read, readOnly: field.isReadOnly() || undefined, required: field.isRequired() || undefined, widgets });
   }
   const info = { title: doc.getTitle() || undefined, author: doc.getAuthor() || undefined, subject: doc.getSubject() || undefined };
   return { pages, fields, info };

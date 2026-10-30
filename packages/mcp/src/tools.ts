@@ -124,7 +124,7 @@ const describeField = (pdf: Pdf, field: Field) => {
   const options = field.options?.length ? ` · options: ${field.options.join(' | ')}` : '';
   const flags = [field.readOnly && 'read only', field.required && 'required', field.multiline && 'several lines', field.maxLength && `at most ${field.maxLength} letters`].filter(Boolean).join(', ');
   const pages = [...new Set(field.widgets.map((w) => numberOf(pdf, w.page)))].join(', ');
-  return `- ${field.name} (${field.kind}, page ${pages}): ${value}${options}${flags ? ` · ${flags}` : ''}`;
+  return `- ${field.name}${field.label ? ` "${field.label}"` : ''} (${field.kind}, page ${pages}): ${value}${options}${flags ? ` · ${flags}` : ''}`;
 };
 
 const describeMark = (pdf: Pdf, mark: Mark) => {

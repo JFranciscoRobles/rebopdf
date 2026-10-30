@@ -213,7 +213,12 @@ export function makeOption(doc: Document, text: string, value = text, selected =
 }
 
 /** A name for a field a person can read: "client.name" is "client name". */
-export const fieldLabel = (field: Field) => field.name.replace(/[._[\]]+/g, ' ').trim();
+export const fieldLabel = (field: Field) =>
+  field.label ??
+  field.name
+    .replace(/\[\d+\]/g, '')
+    .replace(/[._[\]]+/g, ' ')
+    .trim();
 
 export interface FieldEvents {
   /** Whether what they hold can be changed. */
@@ -251,6 +256,12 @@ export function renderFields(layer: HTMLElement, fields: Field[], page: string, 
 }
 
 function makeControl(doc: Document, field: Field, option: string | undefined, events: FieldEvents): HTMLElement {
+  const el = makeInput(doc, field, option, events);
+  if (field.label) el.title = field.label;
+  return el;
+}
+
+function makeInput(doc: Document, field: Field, option: string | undefined, events: FieldEvents): HTMLElement {
   const label = fieldLabel(field);
   switch (field.kind) {
     case 'checkbox':

@@ -36,11 +36,11 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('a form is filled in the page and saved as a form', async ({ page }) => {
-  await page.getByRole('textbox', { name: 'client name' }).fill('Ana García');
-  await page.getByRole('combobox', { name: 'plan' }).selectOption('Professional');
-  await page.getByRole('radio', { name: 'billing: Yearly' }).click();
-  await page.getByRole('checkbox', { name: 'accept' }).click();
-  await expect(page.getByRole('checkbox', { name: 'accept' })).toHaveAttribute('aria-checked', 'true');
+  await page.getByRole('textbox', { name: 'Full name' }).fill('Ana García');
+  await page.getByRole('combobox', { name: 'Plan' }).selectOption('Professional');
+  await page.getByRole('radio', { name: 'Billing: Yearly' }).click();
+  await page.getByRole('checkbox', { name: 'I have read and accept the terms of this agreement.' }).click();
+  await expect(page.getByRole('checkbox', { name: 'I have read and accept the terms of this agreement.' })).toHaveAttribute('aria-checked', 'true');
   expect((await state(page)).fields).toMatchObject({ 'client.name': 'Ana García', plan: 'Professional', billing: 'Yearly', accept: true });
   // The typing of a field is one step back.
   await page.getByRole('button', { name: 'Undo' }).click();
@@ -213,7 +213,7 @@ test('text is found, every place it is shown, the next and the one before', asyn
 });
 
 test('flattened, the fields and the marks are drawn into the pages', async ({ page }) => {
-  await page.getByRole('textbox', { name: 'client name' }).fill('Luis');
+  await page.getByRole('textbox', { name: 'Full name' }).fill('Luis');
   const { pdf, bytes } = await downloaded(page, true);
   expect(pdf.fields).toEqual([]);
   const { pageText } = await import('@rebopdf/core');
@@ -235,7 +235,7 @@ test('the zoom changes the size of the pages and keeps the page in view', async 
 for (const scheme of ['light', 'dark'] as const) {
   test(`nothing an accessibility check finds, ${scheme}`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: scheme });
-    await page.getByRole('textbox', { name: 'client name' }).click();
+    await page.getByRole('textbox', { name: 'Full name' }).click();
     const results = await new AxeBuilder({ page }).analyze();
     expect(results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
   });

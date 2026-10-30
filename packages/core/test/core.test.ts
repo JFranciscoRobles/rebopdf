@@ -47,6 +47,8 @@ describe('opening', () => {
       ['accept', 'checkbox', false],
     ]);
     expect(findField(pdf, 'plan')?.options).toEqual(['Básico', 'Profesional', 'Empresa']);
+    // What each is called for a person, as the PDF says it.
+    expect(pdf.fields.map((f) => f.label)).toEqual(['Nombre completo', 'Correo', 'Fecha de inicio', 'Plan', 'Facturación', 'He leído y acepto los términos de este contrato.']);
     const billing = findField(pdf, 'billing')!;
     expect(billing.widgets.map((w) => w.option)).toEqual(['Mensual', 'Anual']);
     expect(billing.widgets.every((w) => w.page === pdf.pages[0].id)).toBe(true);

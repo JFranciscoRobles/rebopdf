@@ -129,7 +129,7 @@ const CSS = `
 .rp-field:disabled, .rp-field[aria-disabled="true"] { background: transparent; cursor: default; }
 textarea.rp-field { resize: none; padding-top: 2px; line-height: 1.2; }
 select.rp-field { padding: 0 2px; }
-.rp-check { display: grid; place-items: center; padding: 0; cursor: pointer; }
+.rp-check { display: grid; place-items: center; padding: 0; border-color: rgba(27, 27, 27, 0.55); cursor: pointer; }
 .rp-check svg { width: 85%; height: 85%; }
 .rp-check[aria-checked="false"] svg { visibility: hidden; }
 .rp-check.rp-radio { border-radius: 50%; }

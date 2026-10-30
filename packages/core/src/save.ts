@@ -42,7 +42,7 @@ import {
   stroke,
   degrees,
 } from '@cantoo/pdf-lib';
-import { loadDocument } from './open';
+import { formOf, loadDocument } from './open';
 import type { Color, Field, HighlightMark, InkMark, Mark, NoteMark, Pdf, Point, Rect, SignatureMark, TextMark } from './types';
 
 export interface SaveOptions {
@@ -150,13 +150,8 @@ function dropUnreachable(doc: PDFDocument, gone: Set<string>) {
 
 /** Writes what the fields hold; those no longer in the Pdf (their pages taken out) are taken out of the form. */
 function fillForm(doc: PDFDocument, fields: Field[], keep: boolean) {
-  let form: ReturnType<PDFDocument['getForm']>;
-  try {
-    form = doc.getForm();
-  } catch {
-    return;
-  }
-  if (!form.getFields().length) return;
+  const form = formOf(doc);
+  if (!form?.getFields().length) return;
   const byName = new Map(fields.map((field) => [field.name, field]));
   for (const field of form.getFields()) {
     const ours = byName.get(field.getName());

@@ -43,6 +43,8 @@ export interface Field {
   source: string;
   /** Its full name in the file, as "client.name". */
   name: string;
+  /** What it is called for a person, when the PDF says so (as "First name"). */
+  label?: string;
   kind: FieldKind;
   /** Text for text, a choice and a radio ('' for none); whether it is checked for a checkbox; the chosen for a list. */
   value: string | boolean | string[];

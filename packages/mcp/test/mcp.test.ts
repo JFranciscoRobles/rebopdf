@@ -77,9 +77,9 @@ describe('the MCP server', () => {
     expect(read).toContain('## Page 2 (595.3 × 841.9 pt)');
     expect(read).toContain('3. Confidentiality');
     expect((await call('search_pdf', { text: 'thirty days' })).text).toMatch(/^2 found:\n1\. page 1: …/);
-    expect((await call('list_fields')).text).toContain('- plan (choice, page 1): (empty) · options: Basic | Professional | Business');
+    expect((await call('list_fields')).text).toContain('- plan "Plan" (choice, page 1): (empty) · options: Basic | Professional | Business');
 
-    expect((await call('fill_fields', { values: { 'client.name': 'Ana García', plan: 'Business', accept: true, billing: 'Yearly' } })).text).toContain('- accept (checkbox, page 1): checked');
+    expect((await call('fill_fields', { values: { 'client.name': 'Ana García', plan: 'Business', accept: true, billing: 'Yearly' } })).text).toMatch(/- accept "I have read.*" \(checkbox, page 1\): checked/);
     const wrong = await call('fill_fields', { values: { plan: 'Gold' } });
     expect(wrong).toMatchObject({ error: true, text: 'plan takes one of: Basic, Professional, Business.' });
     expect((await call('fill_fields', { values: { nobody: 'x' } })).text).toMatch(/^There is no field "nobody"/);

@@ -3,7 +3,7 @@
 // buttons), clauses to read, highlight and search, and lines to sign on.
 // Made here with pdf-lib, the same every time.
 
-import { PDFDocument, type PDFFont, type PDFPage, StandardFonts, rgb } from '@cantoo/pdf-lib';
+import { PDFDocument, type PDFFont, PDFHexString, PDFName, type PDFPage, StandardFonts, rgb } from '@cantoo/pdf-lib';
 import { openPdf } from './open';
 import { wrap } from './save';
 import type { Pdf } from './types';
@@ -122,9 +122,12 @@ export async function samplePdfBytes(locale: 'en' | 'es' = 'en'): Promise<Uint8A
   y -= 30;
   const full = WIDTH - MARGIN * 2;
   const half = (full - 20) / 2;
+  // What each field is called for a person, as readers say it.
+  const tell = (field: { acroField: { dict: { set(key: PDFName, value: PDFHexString): void } } }, text: string) => field.acroField.dict.set(PDFName.of('TU'), PDFHexString.fromText(text));
   const box = (name: string, text: string, x: number, top: number, width: number) => {
     label(one, text.toUpperCase(), x, top);
     const field = form.createTextField(name);
+    tell(field, text);
     field.addToPage(one, { x, y: top - 30, width, height: 22, borderWidth: 0.8, borderColor: LINE, backgroundColor: rgb(0.99, 0.99, 0.98), font: regular });
     field.setFontSize(10.5);
     return field;
@@ -136,11 +139,13 @@ export async function samplePdfBytes(locale: 'en' | 'es' = 'en'): Promise<Uint8A
   y -= 52;
   label(one, t.plan.toUpperCase(), MARGIN, y);
   const plan = form.createDropdown('plan');
+  tell(plan, t.plan);
   plan.addOptions(t.plans);
   plan.addToPage(one, { x: MARGIN, y: y - 30, width: half, height: 22, borderWidth: 0.8, borderColor: LINE, backgroundColor: rgb(0.99, 0.99, 0.98), font: regular });
   plan.setFontSize(10.5);
   label(one, t.billing.toUpperCase(), MARGIN + half + 20, y);
   const billing = form.createRadioGroup('billing');
+  tell(billing, t.billing);
   [t.monthly, t.yearly].forEach((option, i) => {
     const x = MARGIN + half + 20 + i * 110;
     billing.addOptionToPage(option, one, { x, y: y - 25, width: 13, height: 13, borderWidth: 0.8, borderColor: MUTED });
@@ -148,6 +153,7 @@ export async function samplePdfBytes(locale: 'en' | 'es' = 'en'): Promise<Uint8A
   });
   y -= 64;
   const accept = form.createCheckBox('accept');
+  tell(accept, t.accept);
   accept.addToPage(one, { x: MARGIN, y: y - 2, width: 13, height: 13, borderWidth: 0.8, borderColor: MUTED });
   one.drawText(t.accept, { x: MARGIN + 22, y: y + 1, size: 10.5, font: regular, color: INK });
 
