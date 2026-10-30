@@ -25,7 +25,8 @@
     "release": "npm run build:packages && node tools/release.mjs",
     "collab": "vite-node packages/collab/src/main.ts",
     "site": "npm run dev -w @rebopdf/site",
-    "build:site": "npm run build -w @rebopdf/site"
+    "build:site": "npm run build -w @rebopdf/site",
+    "desktop": "npm run dev -w @rebopdf/desktop"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",

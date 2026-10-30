@@ -19,3 +19,7 @@ playwright-report
 apps/site/.next
 apps/site/out
 apps/site/next-env.d.ts
+
+# The desktop app: what Rust and Tauri make.
+apps/desktop/src-tauri/target
+apps/desktop/src-tauri/gen

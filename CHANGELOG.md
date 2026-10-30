@@ -88,6 +88,12 @@ The first version to go to npm: 0.1.0 never went, and what it has is here.
   under it, the demo on the whole window (the editor or the viewer alone,
   shared with `?collab=`), and seventeen pages of documentation in English
   and Spanish.
+- **The desktop app** (`npm run desktop`, Tauri): a window for each PDF,
+  saved to its file (after its signatures, when it is signed) or to
+  another; PDFs opened from the Finder or the Explorer, dropped on its icon
+  or on a window (their pages put in when it has a PDF); native menus in
+  Spanish and English; changes not saved asked about before a window
+  closes. The editor gives `addFiles` for it.
 - The editor takes items of the application's own in its menu (`menu`),
   and says what they did (`notify`).
 - Saved by adding to the file, only what changed is written: the fields

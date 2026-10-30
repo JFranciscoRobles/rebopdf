@@ -1654,7 +1654,7 @@ export class Editor {
       event.preventDefault();
       depth = 0;
       zone.hidden = true;
-      void this.add([...((event as DragEvent).dataTransfer?.files ?? [])]);
+      void this.addFiles([...((event as DragEvent).dataTransfer?.files ?? [])]);
     });
   }
 
@@ -1680,7 +1680,7 @@ export class Editor {
   }
 
   /** Adds the pages of these files after the page in view; the first is opened when there is no PDF. */
-  private async add(files: File[]) {
+  async addFiles(files: File[]): Promise<void> {
     for (const file of files) {
       const pdf = await this.read(file);
       if (!pdf) continue;
@@ -1705,7 +1705,7 @@ export class Editor {
         if (!insert && files[0]) {
           const pdf = await this.read(files[0]);
           if (pdf) this.setPdf(pdf);
-        } else await this.add(files);
+        } else await this.addFiles(files);
         resolve();
       });
       input.click();
@@ -1735,7 +1735,7 @@ export class Editor {
     root.addEventListener('dragover', (event) => event.preventDefault());
     root.addEventListener('drop', (event) => {
       event.preventDefault();
-      void this.add([...(event.dataTransfer?.files ?? [])]);
+      void this.addFiles([...(event.dataTransfer?.files ?? [])]);
     });
     this.host.append(root);
     // The viewer takes its place.
