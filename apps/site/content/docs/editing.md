@@ -46,3 +46,9 @@ const bytes = await savePdf(pdf, { protect: { password: 'abre', permissions: { c
 ## Smaller
 
 Download smaller (in the menu ⋯) makes the PDF smaller: its pictures no bigger than its pages show them, at 150 dots to the inch; photographs written again as JPEG; and a picture or a font it has twice kept once. Each is changed only when that makes it smaller. In code, `savePdf(pdf, { optimize: { dpi: 150, quality: 0.75 } })`.
+
+## PDF/A
+
+Download as PDF/A (in the menu ⋯) makes a PDF/A-2B, as archives and many offices ask documents to be kept: every font it draws with carried in it (those it only names taken from the ones PDF.js carries, made to measure as the standard ones: Liberation Sans for Helvetica and Arial, Foxit's for Times, Courier, Symbol and ZapfDingbats), nothing that runs, its colours and its metadata as PDF/A says. In code, `savePdf(pdf, { pdfa: true })` (or `'3B'`; it is 3B by itself when the PDF carries files). In a browser, the fonts are fetched from the folder given to `usePdfAssets`.
+
+To be sure an archive takes it, check it with [veraPDF](https://verapdf.org/).

@@ -46,3 +46,9 @@ const bytes = await savePdf(pdf, { protect: { password: 'abre', permissions: { c
 ## Más pequeño
 
 Descargar más pequeño (en el menú ⋯) reduce el PDF: sus imágenes no más grandes de lo que las muestran sus páginas, a 150 puntos por pulgada; las fotografías se escriben otra vez como JPEG; y una imagen o una fuente que tenga dos veces se guarda una sola. Cada cosa se cambia solo si así queda más pequeña. En código, `savePdf(pdf, { optimize: { dpi: 150, quality: 0.75 } })`.
+
+## PDF/A
+
+Descargar como PDF/A (en el menú ⋯) hace un PDF/A-2B, como piden archivos y muchas oficinas guardar documentos: con todas las fuentes que usa dentro (las que solo nombra se toman de las que trae PDF.js, hechas a la medida de las estándar: Liberation Sans para Helvetica y Arial, las de Foxit para Times, Courier, Symbol y ZapfDingbats), sin nada que se ejecute, y con sus colores y metadatos como dice PDF/A. En código, `savePdf(pdf, { pdfa: true })` (o `'3B'`; es 3B por sí solo cuando el PDF trae archivos). En el navegador, las fuentes se descargan de la carpeta dada a `usePdfAssets`.
+
+Para asegurar que un archivo lo acepte, verifícalo con [veraPDF](https://verapdf.org/).

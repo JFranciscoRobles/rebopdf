@@ -242,14 +242,15 @@ export function createPdfServer(options: ServerOptions = {}) {
         const doc = document(args.document);
         const target = args.file ? allowed(String(args.file)) : doc.file.replace(/(\.pdf)?$/i, (ext) => ` (edited)${ext || '.pdf'}`);
         const protect = args.password ? { password: String(args.password), permissions: { copying: !args.no_copying, printing: !args.no_printing } } : undefined;
-        const incremental = savesIncrementally(doc.pdf, 'auto', protect, !!args.optimize);
-        const bytes = await savePdf(doc.pdf, { flatten: !!args.flatten, font: await fontBytes(), protect, optimize: !!args.optimize });
+        const incremental = savesIncrementally(doc.pdf, 'auto', protect, !!args.optimize, !!args.pdfa);
+        const bytes = await savePdf(doc.pdf, { flatten: !!args.flatten, font: await fontBytes(), protect, optimize: !!args.optimize, pdfa: !!args.pdfa });
         await writeFile(target, bytes);
         if (target === doc.file) doc.unsaved = false;
         const blacked = doc.pdf.marks.filter((m) => m.kind === 'redaction').length;
         const notes = [
           blacked && `${blacked} ${blacked === 1 ? 'part' : 'parts'} blacked out for good: what was under them is not in the file`,
           protect && 'encrypted: it opens only with the password',
+          args.pdfa && 'PDF/A, every font carried in it',
           doc.pdf.signatures?.length && (incremental ? 'added after its digital signature, which still holds' : `its digital signature no longer holds: ${whyNotIncremental(doc.pdf)}`),
         ].filter(Boolean);
         // The PDF open is the one saved: what is blacked out is gone from it too.

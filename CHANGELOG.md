@@ -119,6 +119,13 @@ The first version to go to npm: 0.1.0 never went, and what it has is here.
   authorities sign with. In the editor, Sign digitally has a field for the
   authority (`signing.timestamp`) and a box to keep what checks it; in the
   MCP server, `timestamp`, `long_term` and `trusted`.
+- **PDF/A** (`pdfa` of `savePdf`; Download as PDF/A in the editor; `pdfa`
+  of `save_pdf`): PDF/A-2B (3B when it carries files), every font it draws
+  with carried in it: those it only names taken from PDF.js's (Liberation
+  Sans, and Foxit's CFF fonts, read here for their widths), nothing that
+  runs, annotations printed, its identity, sRGB output intent and XMP
+  metadata by pdf-lib (which our writer now keeps in step, as pdf-lib's
+  did).
 - **Smaller PDFs** (`optimize` of `savePdf`; Download smaller in the editor;
   `optimize` of `save_pdf`): pictures no bigger than the pages show them
   (150 dots to the inch, or `dpi`), photographs written again as JPEG at

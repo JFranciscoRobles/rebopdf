@@ -61,6 +61,22 @@ function nodeAssets(): string | undefined {
   }
 }
 
+/** A font PDF.js carries (of its `standard_fonts/`), by its file: from the disk in Node, from the address given to `usePdfAssets` in a browser. */
+export async function standardFont(file: string): Promise<Uint8Array | undefined> {
+  const local = nodeAssets();
+  if (local) {
+    try {
+      const { readFileSync } = process.getBuiltinModule('fs');
+      return new Uint8Array(readFileSync(`${local}standard_fonts/${file}`));
+    } catch {
+      return undefined;
+    }
+  }
+  if (!assets) return undefined;
+  const response = await fetch(`${assets}standard_fonts/${file}`).catch(() => undefined);
+  return response?.ok ? new Uint8Array(await response.arrayBuffer()) : undefined;
+}
+
 /** What PDF.js is given to open a file: its bytes (a copy: PDF.js takes them away to its worker), and where its fonts and maps are. */
 function source(bytes: Uint8Array) {
   const base = assets ?? nodeAssets();

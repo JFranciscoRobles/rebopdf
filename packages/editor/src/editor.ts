@@ -1463,6 +1463,7 @@ export class Editor {
       item('download', t.download, '', () => void this.saveOrDownload()),
       item('flatten', t.downloadFlat, t.downloadFlatHint, () => void this.downloadFlat()),
       item('download', t.downloadSmaller, t.downloadSmallerHint, () => void this.downloadSmaller()),
+      item('check', t.downloadPdfA, t.downloadPdfAHint, () => void this.downloadAs({ pdfa: true })),
       item('lock', t.downloadProtected, t.downloadProtectedHint, () => void this.downloadProtected()),
       item('signature', t.signDigitally, t.signDigitallyHint, () => void this.signDigitally()),
       ...(this.options.files !== false ? [item('layers', t.compareWith, t.compareHint, () => void this.compareWith())] : []),
@@ -1484,6 +1485,17 @@ export class Editor {
 
   private async downloadFlat() {
     await this.saveOrDownload(true);
+  }
+
+  /** The PDF downloaded as asked (PDF/A…), or what kept it from it said. */
+  private async downloadAs(options: SaveOptions) {
+    const pdf = this.current;
+    if (!pdf) return;
+    try {
+      this.give(await savePdf(pdf, { font: this.options.font, ...options }), pdf.name);
+    } catch (error) {
+      this.toast(error instanceof Error ? error.message : String(error));
+    }
   }
 
   /** The PDF downloaded smaller, and how much. */

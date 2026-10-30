@@ -710,3 +710,23 @@ test('a PDF with a photograph far bigger than its page is downloaded smaller', a
   await expect(toast(page)).toHaveText(/^From .+ to .+\.$/);
   expect((await openPdf(bytes)).pages).toHaveLength(1);
 });
+
+test('a PDF is downloaded as PDF/A, every font carried in it', async ({ page }) => {
+  await page.getByRole('textbox', { name: 'Full name' }).fill('Ana García');
+  const waiting = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'More' }).click();
+  await page.getByRole('menuitem', { name: /Download as PDF\/A/ }).click();
+  const bytes = new Uint8Array(Buffer.concat(await (await (await waiting).createReadStream()).toArray()));
+  const { PDFDocument, PDFDict, PDFName } = await import('@cantoo/pdf-lib');
+  const doc = await PDFDocument.load(bytes);
+  const fonts = doc.context.enumerateIndirectObjects().flatMap(([, o]) => (o instanceof PDFDict && o.get(PDFName.of('Type')) === PDFName.of('Font') ? [o] : []));
+  const bare = fonts.filter((font) => {
+    const subtype = (font.get(PDFName.of('Subtype')) as InstanceType<typeof PDFName>).decodeText();
+    const descriptor = font.lookup(PDFName.of('FontDescriptor'));
+    return subtype !== 'Type0' && subtype !== 'Type3' && !(descriptor instanceof PDFDict && ['FontFile', 'FontFile2', 'FontFile3'].some((k) => descriptor.has(PDFName.of(k))));
+  });
+  expect(fonts.length).toBeGreaterThan(0);
+  expect(bare).toEqual([]);
+  expect(new TextDecoder('latin1').decode(bytes)).toContain('pdfaid');
+  expect((await openPdf(bytes)).fields.find((f) => f.name === 'client.name')?.value).toBe('Ana García');
+});

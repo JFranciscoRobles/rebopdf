@@ -47,6 +47,7 @@ import { dropAnnotations } from './annotations';
 import { overlaps } from './geometry';
 import { annotate, dropUnreachable, mergeWidget } from './objects';
 import { type OptimizeOptions, optimizeDocument } from './optimize';
+import { makePdfA, type PdfALevel } from './pdfa';
 import { writeDocument, writeIncrement } from './writer';
 import { formOf, loadDocument, readField } from './open';
 import { Redactor, unseenOf, writeUnseen } from './redact';
@@ -84,6 +85,12 @@ export interface SaveOptions {
    * what it has twice kept once. An optimized PDF is written whole.
    */
   optimize?: boolean | OptimizeOptions;
+  /**
+   * Made PDF/A, as archives keep documents: PDF/A-2B (or 3B when it carries
+   * files, or when asked), every font it draws with carried in it. Written
+   * whole, and not with a password, which PDF/A does not allow.
+   */
+  pdfa?: boolean | PdfALevel;
 }
 
 /** What may be done with a protected PDF opened by its password: all of it, when left out. */
@@ -104,8 +111,14 @@ export function whyNotIncremental(pdf: Pdf): string | undefined {
 }
 
 /** Whether a Pdf is saved by adding to its file: as asked, or, by default, when it is signed. */
-export function savesIncrementally(pdf: Pdf, asked: SaveOptions['incremental'] = 'auto', protect?: SaveOptions['protect'], optimize?: SaveOptions['optimize']): boolean {
-  const why = protect ? 'It is protected by a password, which the whole file is written with.' : optimize ? 'It is made smaller, which the whole file is written again for.' : whyNotIncremental(pdf);
+export function savesIncrementally(pdf: Pdf, asked: SaveOptions['incremental'] = 'auto', protect?: SaveOptions['protect'], optimize?: SaveOptions['optimize'], pdfa?: SaveOptions['pdfa']): boolean {
+  const why = protect
+    ? 'It is protected by a password, which the whole file is written with.'
+    : pdfa
+      ? 'It is made PDF/A, which the whole file is written again for.'
+      : optimize
+        ? 'It is made smaller, which the whole file is written again for.'
+        : whyNotIncremental(pdf);
   if (asked === true && why) throw new PdfError('incremental', `It cannot be saved by adding to the file as it came: ${why}`);
   if (asked === false || why) return false;
   if (asked === true) return true;
@@ -120,7 +133,8 @@ export const NOTE_SIZE = 20;
 export async function savePdf(pdf: Pdf, options: SaveOptions = {}): Promise<Uint8Array> {
   const used = [...new Set(pdf.pages.map((page) => page.source))];
   const base = used[0];
-  const incremental = savesIncrementally(pdf, options.incremental, options.protect, options.optimize);
+  if (options.pdfa && options.protect) throw new PdfError('invalid', 'A PDF/A is not protected by a password: PDF/A does not allow it.');
+  const incremental = savesIncrementally(pdf, options.incremental, options.protect, options.optimize, options.pdfa);
   const docs = new Map<string, PDFDocument>();
   for (const source of used) docs.set(source, await loadDocument(pdf.sources[source], undefined, incremental));
   const doc = docs.get(base)!;
@@ -206,6 +220,12 @@ export async function savePdf(pdf: Pdf, options: SaveOptions = {}): Promise<Uint
   if (pdf.info.title && doc.getTitle() !== pdf.info.title) doc.setTitle(pdf.info.title);
   dropUnreachable(doc, gone);
   if (options.optimize) await optimizeDocument(doc, options.optimize === true ? {} : options.optimize);
+  if (options.pdfa) {
+    // The appearances of the fields, and the fonts they and the marks use, made first: then all is carried.
+    formOf(doc)?.updateFieldAppearances();
+    await doc.flush();
+    await makePdfA(doc, options.pdfa === true ? undefined : options.pdfa);
+  }
   if (options.protect) {
     const { password, ownerPassword, permissions } = options.protect;
     const allowed = { printing: 'highResolution' as const, copying: true, modifying: true, annotating: true, fillingForms: true, contentAccessibility: true, documentAssembly: true, ...permissions };

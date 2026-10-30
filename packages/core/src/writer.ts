@@ -180,6 +180,8 @@ async function prepare(doc: PDFDocument, whole: boolean) {
     if (!doc.getPageCount()) doc.addPage();
     (doc as unknown as { formCache: { getValue(): PDFForm | undefined } }).formCache.getValue()?.updateFieldAppearances();
   }
+  // A PDF/A keeps its metadata (XMP) as its information says, as pdf-lib does when it writes.
+  (doc as unknown as { syncPDFAMetadata?: () => void }).syncPDFAMetadata?.();
   await doc.flush();
 }
 
