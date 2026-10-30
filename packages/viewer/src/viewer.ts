@@ -307,7 +307,7 @@ export class Viewer {
     const onWheel = (event: WheelEvent) => {
       if (!event.ctrlKey && !event.metaKey) return;
       event.preventDefault();
-      this.setZoom(Math.max(0.1, Math.min(6, this.scale * Math.exp(-event.deltaY / 300))));
+      this.zoomAt(Math.max(0.25, Math.min(4, this.zoomLevel * Math.exp(-event.deltaY / 300))), event.clientX, event.clientY);
     };
     this.scroll.addEventListener('wheel', onWheel, { passive: false });
     this.pinching();
@@ -342,7 +342,9 @@ export class Viewer {
         event.preventDefault();
         const ratio = apart(event.touches) / start;
         cancelAnimationFrame(frame);
-        frame = requestAnimationFrame(() => this.setZoom(Math.max(0.25, Math.min(4, from * ratio))));
+        const [a, b] = [event.touches[0], event.touches[1]];
+        const [x, y] = [(a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2];
+        frame = requestAnimationFrame(() => this.zoomAt(Math.max(0.25, Math.min(4, from * ratio)), x, y));
       },
       { passive: false },
     );
@@ -399,6 +401,26 @@ export class Viewer {
   setZoom(zoom: Zoom): void {
     this.zoom = zoom;
     this.layout(true);
+  }
+
+  /** Zooms keeping still the point of the pages under a place of the screen. */
+  zoomAt(zoom: number, clientX: number, clientY: number): void {
+    const box = this.scroll.getBoundingClientRect();
+    const [cx, cy] = [clientX - box.left, clientY - box.top];
+    const [px, py] = [this.scroll.scrollLeft + cx, this.scroll.scrollTop + cy];
+    const views = [...this.views.values()];
+    const view = views.find((v) => py >= v.el.offsetTop && py <= v.el.offsetTop + v.el.offsetHeight) ?? this.views.get(this.current);
+    if (!view) {
+      this.setZoom(zoom);
+      return;
+    }
+    const fx = (px - view.el.offsetLeft) / view.el.offsetWidth;
+    const fy = (py - view.el.offsetTop) / view.el.offsetHeight;
+    this.zoom = zoom;
+    this.layout(false);
+    this.scroll.scrollTop = view.el.offsetTop + fy * view.el.offsetHeight - cy;
+    this.scroll.scrollLeft = view.el.offsetLeft + fx * view.el.offsetWidth - cx;
+    this.track();
   }
 
   private step(by: number) {

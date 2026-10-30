@@ -79,6 +79,14 @@ minor version (0.x.0) may change the API; such changes are listed under
   pages, its sections opened and closed. Both follow the pages as they are
   moved, joined and taken out (`linksOf`, `outlineOf`). The sample
   agreement has both.
+- **Marks copied, pasted and duplicated** (⌘C, ⌘V, ⌘D, and Duplicate in
+  their menu), and a text or a signature put **on every page** at once:
+  initials, a stamp.
+- **The zoom toward the pointer**: ⌘ and the wheel, or two fingers, keep
+  still the place under them.
+- **Scanned PDFs**: a page with no text is said to be maybe a picture, to
+  the assistant; nothing is found in it, and it is marked and signed as
+  any other.
 - **Blank pages** (`insertBlankPage`, and a button over the thumbnails), as
   big as the page before them.
 - **Printing**, the PDF as it is now.

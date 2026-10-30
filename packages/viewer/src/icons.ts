@@ -32,6 +32,8 @@ const PATHS = {
   check: 'M5 12.5l4.5 4.5L19 7.5',
   form: 'M4 5h16v5H4zM4 14h16v5H4zM7 7.5h5M7 16.5h3',
   flatten: 'M4 8l8-4 8 4-8 4zM4 12l8 4 8-4M4 16l8 4 8-4',
+  copy: 'M8.5 8.5h11v11h-11zM5.5 15.5h-1v-11h11v1',
+  layers: 'M5 9.5h10.5v10.5H5zM8.5 6.5H19V17M11.5 3.5H22',
   more: 'M5.5 12h.01M12 12h.01M18.5 12h.01',
 } as const;
 

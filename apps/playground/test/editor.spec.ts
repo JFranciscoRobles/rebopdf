@@ -375,3 +375,40 @@ test('the notes a PDF comes with are changed and deleted as any other', async ({
   const reader = await readerOf(saved);
   expect((await (await reader.getPage(1)).getAnnotations()).filter((a) => a.subtype === 'Text')).toHaveLength(0);
 });
+
+test('a mark is copied, pasted, duplicated, and a signature put on every page', async ({ page }) => {
+  await page.keyboard.press('t');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('AG');
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await expect(page.locator('.rp-mark-text')).toHaveCount(1);
+  await page.locator('.rp-scroll').focus();
+  await page.keyboard.press('ControlOrMeta+d');
+  await expect(page.locator('.rp-mark-text')).toHaveCount(2);
+  await page.keyboard.press('ControlOrMeta+c');
+  await page.getByRole('textbox', { name: 'Page number' }).fill('2');
+  await page.getByRole('textbox', { name: 'Page number' }).press('Enter');
+  await page.locator('.rp-scroll').focus();
+  await page.keyboard.press('ControlOrMeta+v');
+  await expect(pageEl(page, 2).locator('.rp-mark-text')).toHaveCount(1);
+  // Initials on every page, from the menu of the mark.
+  await pageEl(page, 2).locator('.rp-mark-text').click();
+  await page.getByRole('button', { name: 'On every page' }).click();
+  await expect(page.getByRole('status')).toHaveText('On all 2 pages');
+  await expect(pageEl(page, 1).locator('.rp-mark-text')).toHaveCount(3);
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(pageEl(page, 1).locator('.rp-mark-text')).toHaveCount(2);
+});
+
+test('the zoom of the wheel keeps still the place under the pointer', async ({ page }) => {
+  const title = pageEl(page, 1).locator('.textLayer span', { hasText: 'Service agreement' }).first();
+  const before = (await title.boundingBox())!;
+  await page.mouse.move(before.x + 10, before.y + 10);
+  await page.keyboard.down('Control');
+  await page.mouse.wheel(0, -200);
+  await page.keyboard.up('Control');
+  await expect.poll(async () => (await pageEl(page, 1).boundingBox())!.width).toBeGreaterThan(1000);
+  const after = (await title.boundingBox())!;
+  expect(Math.abs(after.x - before.x)).toBeLessThan(20);
+  expect(Math.abs(after.y - before.y)).toBeLessThan(20);
+});

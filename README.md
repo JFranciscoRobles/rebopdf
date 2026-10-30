@@ -124,8 +124,9 @@ npm run lint
 | V · H · N · D · T · S | Select and fill · Highlight · Note · Draw · Text · Sign |
 | ⌘F | Search |
 | ⌘Z · ⇧⌘Z | Undo · Redo |
-| ⌘+ · ⌘− · ⌘0 | Zoom in · out · automatic |
+| ⌘+ · ⌘− · ⌘0 | Zoom in · out · automatic (⌘ and the wheel, or two fingers: toward where they are) |
 | Delete · arrows | Delete or move the mark chosen (Shift: by 10) |
+| ⌘C · ⌘V · ⌘D | Copy the mark chosen, paste it on the page in view, duplicate it |
 | Alt+↑ · Alt+↓ | Move the page of the thumbnail with the focus |
 | Escape | Let go of the mark, then of the tool |
 

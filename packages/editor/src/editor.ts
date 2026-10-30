@@ -10,6 +10,7 @@ import {
   insertBlankPage,
   insertPdf,
   type Mark,
+  markBounds,
   type MarkPatch,
   movePages,
   type NewMark,
@@ -96,6 +97,8 @@ export class Editor {
   private chosenPages = new Set<string>();
   private lastPage = '';
   private signature?: Signature;
+  /** A mark copied, to be pasted. */
+  private clipboard?: Mark;
   private buttons: Partial<Record<Tool | 'undo' | 'redo' | 'color', HTMLButtonElement>> = {};
   private swatch?: HTMLElement;
   private pop?: HTMLElement;
@@ -759,11 +762,63 @@ export class Editor {
     remove.className = 'rp-button';
     remove.append(icon(this.doc, 'trash', 16), t.remove);
     remove.addEventListener('click', () => this.removeChosen());
+    const actions: HTMLElement[] = [];
+    if (mark.kind !== 'highlight') {
+      const twin = this.doc.createElement('button');
+      twin.type = 'button';
+      twin.className = 'rp-button';
+      twin.append(icon(this.doc, 'copy', 16), t.duplicate);
+      twin.addEventListener('click', () => this.duplicate());
+      actions.push(twin);
+    }
+    if ((mark.kind === 'signature' || mark.kind === 'text') && (this.current?.pages.length ?? 0) > 1) {
+      const every = this.doc.createElement('button');
+      every.type = 'button';
+      every.className = 'rp-button';
+      every.append(icon(this.doc, 'layers', 16), t.everyPage);
+      every.addEventListener('click', () => this.onEveryPage());
+      actions.push(every);
+    }
+    if (actions.length) items.push(this.row([], actions));
     items.push(this.row(mark.kind === 'signature' ? [] : [swatches], [remove]));
     const el = view.el.querySelector(`[data-mark="${CSS.escape(id)}"]`);
     const anchor = el?.getBoundingClientRect() ?? view.el.getBoundingClientRect();
     this.openPop(anchor, items, () => el);
     if (focus) area?.focus();
+  }
+
+  /** Puts a copy of a mark on the page in view: a little down and right of it when that is its page, where it was on another. */
+  private paste(mark: Mark, page = this.viewer?.page ?? mark.page) {
+    if (!this.current?.pages.some((p) => p.id === page)) return;
+    const where = JSON.stringify(markBounds(mark));
+    const shift = page === mark.page && this.current.marks.some((m) => m.page === page && JSON.stringify(markBounds(m)) === where) ? 12 : 0;
+    const { id: _, ...rest } = { ...mark, ...moveBy(mark, { x: shift, y: -shift }), page } as Mark;
+    const next = addMark(this.current, rest as NewMark);
+    this.commit(next);
+    this.choose(next.marks.at(-1)!.id);
+    this.clipboard = next.marks.at(-1);
+  }
+
+  private duplicate() {
+    const mark = this.current?.marks.find((m) => m.id === this.chosen);
+    if (!mark || mark.kind === 'highlight') return;
+    this.closePop();
+    this.paste(mark, mark.page);
+  }
+
+  /** The text or signature chosen, on every other page at the same place: initials, a page number, a stamp. */
+  private onEveryPage() {
+    const mark = this.current?.marks.find((m) => m.id === this.chosen);
+    if (!mark || !this.current) return;
+    let next = this.current;
+    for (const page of this.current.pages) {
+      if (page.id === mark.page) continue;
+      const { id: _, ...rest } = { ...mark, page: page.id } as Mark;
+      next = addMark(next, rest as NewMark);
+    }
+    this.closePop();
+    this.commit(next);
+    this.toast(fill(this.t.onPages, { n: this.current.pages.length }));
   }
 
   private removeChosen() {
@@ -1186,6 +1241,30 @@ export class Editor {
       event.preventDefault();
       this.redo();
       return;
+    }
+    // A mark chosen is copied, pasted and duplicated; text selected is copied as text is.
+    const selected = !this.doc.getSelection()?.isCollapsed;
+    if (mod && !typing && !event.shiftKey && !event.altKey) {
+      const key = event.key.toLowerCase();
+      if (key === 'c' && this.chosen && !selected) {
+        const mark = this.current?.marks.find((m) => m.id === this.chosen);
+        if (mark && mark.kind !== 'highlight') {
+          event.preventDefault();
+          this.clipboard = mark;
+          this.say(this.t.copied);
+        }
+        return;
+      }
+      if (key === 'v' && this.clipboard) {
+        event.preventDefault();
+        this.paste(this.clipboard);
+        return;
+      }
+      if (key === 'd' && this.chosen) {
+        event.preventDefault();
+        this.duplicate();
+        return;
+      }
     }
     if (typing || mod || event.altKey || target.closest('.rp-thumb')) return;
     if (event.key === 'Escape') {

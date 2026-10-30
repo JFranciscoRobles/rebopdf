@@ -132,6 +132,23 @@ describe('the MCP server', () => {
     expect((await pageText(saved, saved.pages[0].id)).text).toContain('Москва');
   });
 
+  it('says a page with no text may be a scanned picture, and finds nothing in it', async () => {
+    const { PDFDocument } = await import('@cantoo/pdf-lib');
+    const doc = await PDFDocument.create();
+    const image = await doc.embedPng(png(200, 280));
+    doc.addPage([200, 280]).drawImage(image, { x: 0, y: 0, width: 200, height: 280 });
+    const dir = await mkdtemp(join(tmpdir(), 'rebopdf-'));
+    await writeFile(join(dir, 'scan.pdf'), await doc.save());
+    const server = createPdfServer({ cwd: dir });
+    const call = async (name: string, args: Record<string, unknown>) =>
+      ((await server.handle({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } })) as { result: { content: { text: string }[] } }).result.content[0].text;
+    await call('open_pdf', { file: 'scan.pdf' });
+    expect(await call('read_pdf', {})).toContain('(no text: it may be a scanned image)');
+    expect(await call('search_pdf', { text: 'contract' })).toBe('"contract" is not in scan.pdf.');
+    // A note and a signature go on it all the same.
+    expect(await call('add_note', { page: 1, text: 'Unreadable', x: 20, y: 20 })).toMatch(/^Added a note on page 1/);
+  });
+
   it('keeps to its folders', async () => {
     const { call } = await setup();
     const outside = await call('open_pdf', { file: '/etc/hosts' });
