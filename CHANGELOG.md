@@ -52,7 +52,7 @@ minor version (0.x.0) may change the API; such changes are listed under
   `?viewer`, `?empty`, `?lang=es`.
 - **Tried on PDFs of the world**: the forms of the IRS (1040: 199 fields,
   and an XFA form beside them, taken out so that what is filled is what
-  every reader shows), a paper of fifteen pages, a scanned one, and one of
+  every reader shows), a paper of fifteen pages, the Bitcoin paper, and one of
   300 pages and 37 MB, which opens in about a second, draws any page in less
   than one, finds a word in all of them in a second and a half, and is
   saved in two and a half: pdf-lib reads and writes fifteen hundred objects
@@ -64,6 +64,10 @@ minor version (0.x.0) may change the API; such changes are listed under
 - **Text in any script** with a font given (`font`, of `savePdf`, the
   viewer, the editor, and `--font` of the MCP server), put in the PDF with
   the letters used alone, by `@cantoo/fontkit`.
+- **PDFs with a password**: asked for it (again, when it is not the one),
+  opened, drawn and saved, to be opened after with none; those protected
+  only from being changed, as many are, open with no password, as every
+  reader opens them.
 - **Blank pages** (`insertBlankPage`, and a button over the thumbnails), as
   big as the page before them.
 - **Printing**, the PDF as it is now.

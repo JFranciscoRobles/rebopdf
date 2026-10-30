@@ -305,3 +305,25 @@ test.describe('on a phone', () => {
     await expect(page.getByRole('textbox', { name: 'Page number' })).toHaveValue('2');
   });
 });
+
+test('a PDF with a password is asked for it, opened, and its pages drawn', async ({ page }) => {
+  const { PDFDocument } = await import('@cantoo/pdf-lib');
+  const doc = await PDFDocument.load(await samplePdfBytes('es'));
+  doc.encrypt({ userPassword: 'secreto', ownerPassword: 'dueño' });
+  const locked = Buffer.from(await doc.save());
+  const asked: string[] = [];
+  page.on('dialog', (dialog) => {
+    asked.push(dialog.message());
+    void dialog.accept(asked.length === 1 ? 'mal' : 'secreto');
+  });
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'More' }).click();
+  await page.getByRole('menuitem', { name: 'Open a PDF…' }).click();
+  await (await chooser).setFiles({ name: 'Cerrado.pdf', mimeType: 'application/pdf', buffer: locked });
+  await expect(page.locator('.rp-title')).toHaveText('Cerrado');
+  expect(asked).toEqual(['Password for Cerrado.pdf', 'Password for Cerrado.pdf']);
+  await expect(pageEl(page, 1).locator('.textLayer span').first()).toBeVisible();
+  await page.getByRole('textbox', { name: 'Nombre completo' }).fill('Luis');
+  const { pdf } = await downloaded(page);
+  expect(pdf.fields.find((f) => f.name === 'client.name')?.value).toBe('Luis');
+});

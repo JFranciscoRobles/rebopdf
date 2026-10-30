@@ -13,13 +13,9 @@ import {
   type PDFDocument,
   type PDFFont,
   PDFHexString,
-  PDFArray,
-  PDFDict,
   PDFName,
   PDFNumber,
-  PDFObject,
-  PDFRef,
-  PDFStream,
+  type PDFRef,
   type PDFOperator,
   type PDFPage,
   PDFString,
@@ -42,6 +38,7 @@ import {
   stroke,
   degrees,
 } from '@cantoo/pdf-lib';
+import { dropUnreachable } from './objects';
 import { formOf, loadDocument, OBJECTS_AT_ONCE } from './open';
 import type { Color, Field, HighlightMark, InkMark, Mark, NoteMark, Pdf, Point, Rect, SignatureMark, TextMark } from './types';
 
@@ -131,35 +128,6 @@ function setPages(doc: PDFDocument, order: PDFPage[]) {
   root.set(PDFName.of('Kids'), doc.context.obj(order.map((page) => page.ref)));
   root.set(PDFName.of('Count'), PDFNumber.of(order.length));
   for (const page of order) page.node.setParent(rootRef);
-}
-
-/**
- * Takes out of the file what nothing in it reaches any more: the pages taken
- * out, which would otherwise still be in its bytes, and what only they used.
- * What pointed at a page taken out (a link, a bookmark) points at nothing,
- * which readers take as nothing.
- */
-function dropUnreachable(doc: PDFDocument, gone: Set<string>) {
-  const { context } = doc;
-  const seen = new Set<string>();
-  const stack: PDFObject[] = Object.values(context.trailerInfo).filter((value): value is PDFObject => value instanceof PDFObject);
-  while (stack.length) {
-    const object = stack.pop()!;
-    if (object instanceof PDFRef) {
-      const key = object.toString();
-      if (seen.has(key) || gone.has(key)) continue;
-      seen.add(key);
-      const value = context.lookup(object);
-      if (value) stack.push(value);
-    } else if (object instanceof PDFDict) {
-      for (const [, value] of object.entries()) stack.push(value);
-    } else if (object instanceof PDFArray) {
-      for (let i = 0; i < object.size(); i++) stack.push(object.get(i));
-    } else if (object instanceof PDFStream) {
-      stack.push(object.dict);
-    }
-  }
-  for (const [ref] of context.enumerateIndirectObjects()) if (!seen.has(ref.toString())) context.delete(ref);
 }
 
 /** Writes what the fields hold; those no longer in the Pdf (their pages taken out) are taken out of the form. */

@@ -55,6 +55,26 @@ describe('opening', () => {
     expect(billing.widgets.every((w) => w.page === pdf.pages[0].id)).toBe(true);
   });
 
+  it('opens a PDF protected by a password, given it, and saves it to be opened without one', async () => {
+    const { PDFDocument } = await import('@cantoo/pdf-lib');
+    const doc = await PDFDocument.load(await samplePdfBytes('en'));
+    doc.encrypt({ userPassword: 'secret', ownerPassword: 'owner' });
+    const locked = await doc.save();
+    await expect(openPdf(locked)).rejects.toMatchObject({ code: 'encrypted', message: 'This PDF is protected by a password.' });
+    await expect(openPdf(locked, { password: 'wrong' })).rejects.toMatchObject({ code: 'encrypted', message: 'The password is not the one of this PDF.' });
+    const pdf = setField(await openPdf(locked, { password: 'secret' }), 'client.name', 'Ana');
+    expect(pdf.pages).toHaveLength(2);
+    const back = await openPdf(await savePdf(pdf));
+    expect(findField(back, 'client.name')?.value).toBe('Ana');
+    expect((await pageText(back, back.pages[1].id)).text).toContain('Confidentiality');
+
+    // Protected only from being changed: opened as every reader opens it, with no password.
+    const owned = await PDFDocument.load(await samplePdfBytes('en'));
+    owned.encrypt({ userPassword: '', ownerPassword: 'owner' });
+    const open = await openPdf(await owned.save());
+    expect((await pageText(open, open.pages[0].id)).text).toContain('Service agreement');
+  });
+
   it('says in words what keeps a file from being opened', async () => {
     await expect(openPdf(new Uint8Array())).rejects.toMatchObject({ code: 'empty' });
     await expect(openPdf(new TextEncoder().encode('not a pdf at all'))).rejects.toBeInstanceOf(PdfError);

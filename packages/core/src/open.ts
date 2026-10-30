@@ -2,6 +2,7 @@
 // with pdf-lib. The bytes are kept as they came, to be drawn and saved from.
 
 import { PDFCheckBox, PDFDocument, type PDFField, PDFDropdown, PDFHexString, PDFName, PDFOptionList, PDFRadioGroup, type PDFRef, PDFString, PDFTextField } from '@cantoo/pdf-lib';
+import { dropUnreachable } from './objects';
 import { type Field, type Page, type Pdf, PdfError, type Rect } from './types';
 
 /** How many objects pdf-lib reads or writes before it lets the page answer. */
@@ -14,21 +15,51 @@ export const uid = (prefix: string) => `${prefix}${Date.now().toString(36).slice
 export interface OpenOptions {
   /** Its name, as a file. */
   name?: string;
-  /** For a PDF that asks for one to be opened. */
+  /** For a PDF that asks for one to be opened. What is saved of it asks for none. */
   password?: string;
 }
+
+/** The documents that were opened with a password (an empty one, too). */
+const unlockedDocs = new WeakSet<PDFDocument>();
 
 /** Loads a file with pdf-lib, saying in words what keeps it from being opened. */
 export async function loadDocument(bytes: Uint8Array, password?: string): Promise<PDFDocument> {
   if (!bytes.length) throw new PdfError('empty', 'The file is empty.');
+  // Read in batches big enough not to be slow (pdf-lib waits between every hundred objects), small enough for a page to keep answering.
+  const load = (pass?: string) => PDFDocument.load(bytes, { password: pass, updateMetadata: false, parseSpeed: OBJECTS_AT_ONCE });
+  const locked = (error: unknown) => /encrypt|password/i.test(error instanceof Error ? `${error.name} ${error.message}` : String(error));
   try {
-    // Read in batches big enough not to be slow (pdf-lib waits between every hundred objects), small enough for a page to keep answering.
-    return await PDFDocument.load(bytes, { password, updateMetadata: false, parseSpeed: OBJECTS_AT_ONCE });
+    const doc = await load(password);
+    // A password given for a PDF that asks for none goes unused: only one used is told.
+    if (
+      password !== undefined &&
+      (await load().then(
+        () => false,
+        () => true,
+      ))
+    )
+      unlockedDocs.add(doc);
+    return doc;
   } catch (error) {
-    const text = error instanceof Error ? `${error.name} ${error.message}` : String(error);
-    if (/encrypt/i.test(text)) throw new PdfError('encrypted', password ? 'The password is not the one of this PDF.' : 'This PDF is protected by a password.');
-    throw new PdfError('invalid', `This is not a PDF that can be read: ${error instanceof Error ? error.message : text}`);
+    if (!locked(error)) throw new PdfError('invalid', `This is not a PDF that can be read: ${error instanceof Error ? error.message : String(error)}`);
+    if (password) throw new PdfError('encrypted', 'The password is not the one of this PDF.');
   }
+  // Protected only from being changed, as many are: every reader opens it with no password, which is an empty one.
+  try {
+    const doc = await load('');
+    unlockedDocs.add(doc);
+    return doc;
+  } catch {
+    throw new PdfError('encrypted', 'This PDF is protected by a password.');
+  }
+}
+
+/** The bytes of a protected PDF as they read without its protection. */
+async function unlocked(doc: PDFDocument): Promise<Uint8Array> {
+  // What pdf-lib read it has read open; what said how it was locked (its dictionary of encryption, its old table of objects) goes.
+  doc.context.trailerInfo.Encrypt = undefined;
+  dropUnreachable(doc);
+  return doc.save({ objectsPerTick: OBJECTS_AT_ONCE });
 }
 
 /**
@@ -49,13 +80,18 @@ export function formOf(doc: PDFDocument): ReturnType<PDFDocument['getForm']> | u
 /** Opens a PDF from its bytes. */
 export async function openPdf(bytes: Uint8Array, options: OpenOptions = {}): Promise<Pdf> {
   const source = uid('s');
-  const { pages, fields, info } = await readSource(source, bytes, options.password);
+  // A protected PDF is kept open: its bytes as they read without its protection, for PDF.js to draw and to be saved from.
+  const probe = await loadDocument(bytes, options.password);
+  const locked = unlockedDocs.has(probe);
+  if (locked) bytes = await unlocked(probe);
+  // The document read is read from, unless it was read locked: then from its bytes as they are open.
+  const { pages, fields, info } = await readSource(source, bytes, undefined, locked ? undefined : probe);
   return { name: options.name ?? (info.title ? `${info.title}.pdf` : 'document.pdf'), sources: { [source]: bytes }, pages, fields, marks: [], info };
 }
 
 /** What a file gives a Pdf: its pages and fields, with ids of the source it is given. */
-export async function readSource(source: string, bytes: Uint8Array, password?: string): Promise<Pick<Pdf, 'pages' | 'fields' | 'info'>> {
-  const doc = await loadDocument(bytes, password);
+export async function readSource(source: string, bytes: Uint8Array, password?: string, read?: PDFDocument): Promise<Pick<Pdf, 'pages' | 'fields' | 'info'>> {
+  const doc = read ?? (await loadDocument(bytes, password));
   const refs = new Map<string, string>();
   const pages: Page[] = doc.getPages().map((page, index) => {
     const id = uid('p');
