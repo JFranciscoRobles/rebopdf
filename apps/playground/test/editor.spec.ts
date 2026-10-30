@@ -763,3 +763,24 @@ test('bookmarks are made, named, moved and taken away; files are attached', asyn
   await panel.getByRole('button', { name: 'Remove Firmas' }).click({ force: true });
   await expect(panel.getByRole('button', { name: 'Firmas', exact: true })).toHaveCount(0);
 });
+
+test('the text of a page is written again: the old taken out of the file, the new in its place', async ({ page }) => {
+  await page.keyboard.press('e');
+  await expect(page.getByRole('button', { name: 'Edit text', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  const heading = pageEl(page, 1).locator('.textLayer span', { hasText: '1. The work' }).first();
+  const box = (await heading.boundingBox())!;
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  const input = page.getByRole('textbox', { name: 'The text', exact: true });
+  await expect(input).toHaveValue('1. The work');
+  await input.fill('1. El trabajo');
+  await page.getByRole('combobox', { name: 'Letters' }).selectOption('serif');
+  await input.press('Enter');
+  await expect(pageEl(page, 1).locator('.rp-mark-replacing')).toHaveText('1. El trabajo');
+  // Found as it reads now, before it is saved.
+  const { pdf } = await downloaded(page);
+  const { pageText } = await import('@rebopdf/core');
+  const text = (await pageText(pdf, pdf.pages[0].id)).text;
+  expect(text).toContain('1. El trabajo');
+  expect(text).not.toContain('1. The work');
+  expect(text).toContain('The provider designs and builds the website');
+});

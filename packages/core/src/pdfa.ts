@@ -16,7 +16,7 @@ import { PdfError } from './types';
 export type PdfALevel = '2B' | '3B';
 
 /** The glyphs of WinAnsiEncoding, from code 32. */
-const WIN_ANSI = (
+export const WIN_ANSI = (
   'space exclam quotedbl numbersign dollar percent ampersand quotesingle parenleft parenright asterisk plus comma hyphen period slash ' +
   'zero one two three four five six seven eight nine colon semicolon less equal greater question at ' +
   'A B C D E F G H I J K L M N O P Q R S T U V W X Y Z bracketleft backslash bracketright asciicircum underscore grave ' +

@@ -45,6 +45,7 @@ import {
 } from '@cantoo/pdf-lib';
 import { dropAnnotations } from './annotations';
 import { overlaps } from './geometry';
+import { removeText } from './content';
 import { annotate, dropUnreachable, mergeWidget } from './objects';
 import { type OptimizeOptions, optimizeDocument } from './optimize';
 import { outlineOf } from './links';
@@ -195,11 +196,23 @@ export async function savePdf(pdf: Pdf, options: SaveOptions = {}): Promise<Uint
         // The words recognized in the picture of the page, unseen over it, as a scanner that reads them writes them.
         writeUnseen(out, pdf.recognized[page.id].map(unseenOf), await helvetica());
       }
+      // Text written in place of the page's: the page's taken out of what it draws, or, where that cannot be, covered.
+      const replacing = pdf.marks.filter((mark): mark is TextMark => mark.page === page.id && mark.kind === 'text' && !!mark.replaces);
+      const covered =
+        replacing.length &&
+        !removeText(
+          out,
+          replacing.map((mark) => mark.replaces!.rect),
+        );
       for (const mark of pdf.marks) {
         if (mark.page !== page.id || mark.kind === 'redaction') continue;
+        if (covered && mark.kind === 'text' && mark.replaces) {
+          const { x, y, width, height } = mark.replaces.rect;
+          out.drawRectangle({ x: x - 0.5, y: y - 0.5, width: width + 1, height: height + 1, color: rgb(1, 1, 1) });
+        }
         // What would lie over what is blacked out goes with it.
         if (blacked?.some((box) => overlaps(markBounds(mark), box))) continue;
-        await putMark(doc, out, mark, !!options.flatten, helvetica);
+        await putMark(doc, out, mark, !!options.flatten, options.font ? helvetica : mark.kind === 'text' ? () => standardFont(doc, mark) : helvetica);
       }
     }
   } finally {
@@ -521,6 +534,21 @@ async function textFont(doc: PDFDocument, bytes?: Uint8Array): Promise<PDFFont> 
   return doc.embedFont(bytes, { subset: true });
 }
 
+const STANDARD_FAMILIES = {
+  sans: [StandardFonts.Helvetica, StandardFonts.HelveticaBold, StandardFonts.HelveticaOblique, StandardFonts.HelveticaBoldOblique],
+  serif: [StandardFonts.TimesRoman, StandardFonts.TimesRomanBold, StandardFonts.TimesRomanItalic, StandardFonts.TimesRomanBoldItalic],
+  mono: [StandardFonts.Courier, StandardFonts.CourierBold, StandardFonts.CourierOblique, StandardFonts.CourierBoldOblique],
+};
+
+/** The standard font of a text mark's family, weight and slant, put in the document once. */
+function standardFont(doc: PDFDocument, mark: TextMark): Promise<PDFFont> {
+  const name = STANDARD_FAMILIES[mark.family ?? 'sans'][(mark.bold ? 1 : 0) + (mark.italic ? 2 : 0)];
+  const cache = ((doc as unknown as { rpFonts?: Map<string, Promise<PDFFont>> }).rpFonts ??= new Map());
+  let font = cache.get(name);
+  if (!font) cache.set(name, (font = doc.embedFont(name)));
+  return font;
+}
+
 /** The text as the font can write it: what it has no glyph for is left out. */
 export function writable(font: PDFFont, text: string): string {
   const letters = new Set(font.getCharacterSet());
@@ -551,7 +579,8 @@ export function wrap(text: string, width: number, measure: (line: string) => num
 
 function drawText(page: PDFPage, mark: TextMark, font: PDFFont) {
   const text = writable(font, mark.text);
-  const lines = wrap(text, mark.rect.width, (line) => font.widthOfTextAtSize(line, mark.size));
+  // In place of the page's text, on one line, as it was.
+  const lines = mark.replaces ? [text.replace(/\n/g, ' ')] : wrap(text, mark.rect.width, (line) => font.widthOfTextAtSize(line, mark.size));
   const leading = mark.size * 1.25;
   const [r, g, b] = colour(mark.color);
   lines.forEach((line, i) => {

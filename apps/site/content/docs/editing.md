@@ -65,3 +65,13 @@ next = attachFile(next, { name: 'accounts.csv', data, mime: 'text/csv' });
 ```
 
 Bookmarks lead to the pages as they are when the PDF is saved; a PDF/A that carries files is PDF/A-3.
+
+## The text of the page, written again
+
+Edit text (E) writes a line of the page again: click it, change what it says (and its letters, if you like), and Replace. When the PDF is saved, the old text is taken out of what the page draws, glyph by glyph, with the room it took kept so the rest of the line stays where it was: it is not covered, it is gone, and it is not found any more. The new text is written where it was, of its size. In code, a text mark with `replaces`:
+
+```ts
+addMark(pdf, { kind: 'text', page, rect, text: '1500 pesos', size: 11, color: '#000000', replaces: { rect, text: '1200 pesos' } });
+```
+
+Text drawn inside forms (XObjects) of the page, or in fonts of codes other than one or two bytes, is covered instead.

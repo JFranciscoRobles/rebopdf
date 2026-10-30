@@ -4,15 +4,18 @@
 // end of a line.
 
 import { pageById } from './edit';
-import { outside, redactedOn } from './geometry';
+import { outside, overlaps, redactedOn } from './geometry';
 import { readerFor } from './pdfjs';
-import { type Pdf, PdfError, type Rect, type Word } from './types';
+import { type Pdf, PdfError, type Rect, type TextMark, type Word } from './types';
 
 /** A run of text on a page, from `start` in the text of the page. */
 export interface TextRun {
   text: string;
   rect: Rect;
   start: number;
+  /** How big its letters are, and of which family, as PDF.js reads them. */
+  size?: number;
+  family?: 'sans' | 'serif' | 'mono';
 }
 
 export interface PageText {
@@ -28,8 +31,11 @@ export async function pageText(pdf: Pdf, id: string): Promise<PageText> {
   if (!page) throw new PdfError('not-found', `There is no page ${id}.`);
   const reader = await readerFor(pdf, page.source);
   const content = await (await reader.getPage(page.index + 1)).getTextContent();
-  // What is blacked out is not text of the page any more, before it is saved as after.
-  const redacted = redactedOn(pdf, id);
+  // What is blacked out is not text of the page any more, before it is saved as after; nor what is written over, which reads as what is written in its place.
+  const replacing = pdf.marks.filter((mark): mark is TextMark => mark.page === id && mark.kind === 'text' && !!mark.replaces);
+  const redacted = [...redactedOn(pdf, id), ...replacing.map((mark) => mark.replaces!.rect)];
+  const written = new Set<string>();
+  const styles = (content as { styles?: Record<string, { fontFamily?: string }> }).styles ?? {};
   let text = '';
   const runs: TextRun[] = [];
   for (const item of content.items) {
@@ -37,12 +43,21 @@ export async function pageText(pdf: Pdf, id: string): Promise<PageText> {
     const [, , c, d, e, f] = item.transform as number[];
     const size = Math.hypot(c, d) || item.height;
     if (item.str) {
-      const pieces = outside(item.str, { x: e, y: f - size * 0.22, width: item.width, height: size * 1.16 }, redacted);
+      const box = { x: e, y: f - size * 0.22, width: item.width, height: size * 1.16 };
+      const family = /mono|courier/i.test(styles[item.fontName]?.fontFamily ?? '') ? 'mono' : /serif/i.test((styles[item.fontName]?.fontFamily ?? '').replace(/sans-serif/i, '')) ? 'serif' : 'sans';
+      const pieces = outside(item.str, box, redacted);
       pieces.forEach((piece, i) => {
         if (i) text += ' ';
-        runs.push({ text: piece.text, start: text.length, rect: piece.rect });
+        runs.push({ text: piece.text, start: text.length, rect: piece.rect, size, family });
         text += piece.text;
       });
+      for (const mark of replacing) {
+        if (written.has(mark.id) || !overlaps(mark.replaces!.rect, box)) continue;
+        written.add(mark.id);
+        if (text && !/\s$/.test(text)) text += ' ';
+        runs.push({ text: mark.text, start: text.length, rect: mark.rect, size: mark.size, family: mark.family ?? 'sans' });
+        text += mark.text;
+      }
     }
     if (item.hasEOL) text += '\n';
   }

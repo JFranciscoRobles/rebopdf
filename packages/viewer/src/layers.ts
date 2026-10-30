@@ -156,12 +156,22 @@ export function renderMarks(layer: HTMLElement, marks: Mark[], geo: Geometry, t:
         break;
       }
       case 'text': {
+        // Written in place of the page's text: that covered, until it is taken out when saved.
+        if (mark.replaces) {
+          const cover = doc.createElement('div');
+          cover.className = 'rp-mark-cover';
+          place(cover, geo.toScreenRect(mark.replaces.rect));
+          layer.append(cover);
+        }
         const el = doc.createElement('div');
-        el.className = 'rp-mark rp-mark-text';
+        el.className = `rp-mark rp-mark-text${mark.replaces ? ' rp-mark-replacing' : ''}`;
         el.dataset.mark = mark.id;
         el.textContent = mark.text;
         el.style.color = mark.color;
         el.style.fontSize = `${mark.size * geo.scale}px`;
+        if (mark.family) el.dataset.family = mark.family;
+        if (mark.bold) el.style.fontWeight = '700';
+        if (mark.italic) el.style.fontStyle = 'italic';
         placeTurned(el, mark.rect, geo);
         layer.append(el);
         break;

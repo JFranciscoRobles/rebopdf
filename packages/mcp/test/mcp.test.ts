@@ -243,6 +243,17 @@ describe('the MCP server', () => {
     await expect(openPdf(new Uint8Array(await readFile(join(dir, 'locked.pdf'))))).rejects.toThrow();
   }, 60_000);
 
+  it('writes text of the PDF again, the old gone from the file', async () => {
+    const { dir, call } = await setup();
+    await call('open_pdf', { file: 'contract.pdf' });
+    expect((await call('replace_text', { text: '1. The work', with: '1. El trabajo' })).text).toMatch(/^Replaced 1 place \(page 1\)/);
+    await call('save_pdf', { file: 'replaced.pdf' });
+    const saved = await openPdf(new Uint8Array(await readFile(join(dir, 'replaced.pdf'))));
+    const text = (await pageText(saved, saved.pages[0].id)).text;
+    expect(text).toContain('1. El trabajo');
+    expect(text).not.toContain('1. The work');
+  }, 60_000);
+
   it('keeps to its folders', async () => {
     const { call } = await setup();
     const outside = await call('open_pdf', { file: '/etc/hosts' });

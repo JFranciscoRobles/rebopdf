@@ -44,6 +44,8 @@ import {
   whyNotIncremental,
   updateField,
   updateMark,
+  pageText,
+  type TextMark,
 } from '@rebopdf/core';
 import { fill, type Geometry, type IconName, icon, makeOption, mountComparison, mountViewer, type PageView, pathData, type Viewer, type Zoom } from '@rebopdf/viewer';
 import { type EditorStrings, editorStringsFor } from './i18n';
@@ -52,7 +54,7 @@ import { askProtection } from './protect';
 import { askSignature, type Signature } from './signature';
 import { injectEditorStyles } from './styles';
 
-export type Tool = 'select' | 'highlight' | 'note' | 'ink' | 'text' | 'sign' | 'redact' | 'field';
+export type Tool = 'select' | 'highlight' | 'note' | 'ink' | 'text' | 'edit' | 'sign' | 'redact' | 'field';
 
 /** The kinds of fields made with the tool of fields. */
 export type FieldTool = 'text' | 'checkbox' | 'choice' | 'signature';
@@ -109,6 +111,7 @@ const TOOLS: { tool: Tool; icon: IconName; key: string }[] = [
   { tool: 'note', icon: 'note', key: 'n' },
   { tool: 'ink', icon: 'pen', key: 'd' },
   { tool: 'text', icon: 'text', key: 't' },
+  { tool: 'edit', icon: 'editText', key: 'e' },
   { tool: 'sign', icon: 'signature', key: 's' },
   { tool: 'redact', icon: 'redact', key: 'r' },
   { tool: 'field', icon: 'form', key: 'f' },
@@ -129,7 +132,7 @@ export class Editor {
   private group = '';
   private groupTime = 0;
   private tool: Tool = 'select';
-  private colors: Record<Tool, ColorName> = { select: 'yellow', highlight: 'yellow', note: 'yellow', ink: 'blue', text: 'black', sign: 'black', redact: 'black', field: 'black' };
+  private colors: Record<Tool, ColorName> = { select: 'yellow', highlight: 'yellow', note: 'yellow', ink: 'blue', text: 'black', edit: 'black', sign: 'black', redact: 'black', field: 'black' };
   /** The kind of field the tool of fields makes, and the field chosen. */
   private fieldKind: FieldTool = 'text';
   private chosenField = '';
@@ -229,7 +232,7 @@ export class Editor {
     tools.setAttribute('role', 'group');
     tools.setAttribute('aria-label', t.tools);
     for (const { tool, icon: name, key } of TOOLS) {
-      const label = { select: t.select, highlight: t.highlight, note: t.note, ink: t.draw, text: t.text, sign: t.sign, redact: t.redact, field: t.fields }[tool];
+      const label = { select: t.select, highlight: t.highlight, note: t.note, ink: t.draw, text: t.text, edit: t.editText, sign: t.sign, redact: t.redact, field: t.fields }[tool];
       const b = this.button(name, `${label} (${key.toUpperCase()})`, () => void this.setTool(tool));
       b.setAttribute('aria-label', label);
       b.setAttribute('aria-pressed', String(tool === this.tool));
@@ -713,6 +716,7 @@ export class Editor {
     this.tool = tool;
     this.refresh();
     if (tool === 'note' || tool === 'text') this.say(this.t.placeHint);
+    if (tool === 'edit') this.say(this.t.editTextHint);
   }
 
   private color(kind: 'ink' | 'light' = 'ink') {
@@ -758,6 +762,9 @@ export class Editor {
       case 'note':
       case 'text':
         this.writeAt(this.tool, at.id, at.point, { x: event.clientX, y: event.clientY });
+        return;
+      case 'edit':
+        void this.editTextAt(at.id, at.point, { x: event.clientX, y: event.clientY });
         return;
       case 'ink':
         this.drawInk(event as PointerEvent, at);
@@ -931,6 +938,75 @@ export class Editor {
     };
     handle.addEventListener('pointermove', move);
     handle.addEventListener('pointerup', up);
+  }
+
+  /**
+   * The text of the page at a point, written again: what is written goes in
+   * its place, and, when the PDF is saved, the page's text is taken out.
+   */
+  private async editTextAt(page: string, point: Point, client: Point) {
+    if (!this.current) return;
+    const t = this.t;
+    const pdf = this.current;
+    // Written over already: that is what is changed.
+    const over = pdf.marks.find(
+      (m): m is TextMark =>
+        m.kind === 'text' && m.page === page && !!m.replaces && point.x >= m.rect.x && point.x <= m.rect.x + m.rect.width && point.y >= m.rect.y && point.y <= m.rect.y + m.rect.height,
+    );
+    const { runs } = await pageText(pdf, page);
+    const run = over ? undefined : runs.find((r) => point.x >= r.rect.x - 1 && point.x <= r.rect.x + r.rect.width + 1 && point.y >= r.rect.y - 1 && point.y <= r.rect.y + r.rect.height + 1);
+    if (!over && !run) {
+      this.say(t.editTextHint);
+      return;
+    }
+    const input = this.doc.createElement('input');
+    input.className = 'rp-input';
+    input.value = over?.text ?? run!.text;
+    input.setAttribute('aria-label', t.textContent);
+    const family = this.doc.createElement('select');
+    family.className = 'rp-input';
+    family.setAttribute('aria-label', t.fontFamily);
+    for (const [value, label] of [
+      ['sans', t.familySans],
+      ['serif', t.familySerif],
+      ['mono', t.familyMono],
+    ] as const)
+      family.append(makeOption(this.doc, label, value, value === (over?.family ?? run?.family ?? 'sans')));
+    const bold = Object.assign(this.doc.createElement('input'), { type: 'checkbox', checked: !!over?.bold });
+    const boldLabel = this.labelled(t.bold, bold);
+    const done = this.doc.createElement('button');
+    done.type = 'button';
+    done.className = 'rp-button rp-primary';
+    done.textContent = t.replace;
+    const cancel = this.doc.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'rp-button';
+    cancel.textContent = t.cancel;
+    const finish = () => {
+      const text = input.value;
+      this.closePop();
+      if (!this.current) return;
+      const look = { family: family.value as TextMark['family'], bold: bold.checked || undefined };
+      if (over) {
+        if (text !== over.text || look.family !== over.family || look.bold !== over.bold) this.commit(updateMark(this.current, over.id, { text, ...look }));
+        return;
+      }
+      if (text === run!.text && look.family === run!.family && !look.bold) return;
+      const size = run!.size ?? run!.rect.height / 1.16;
+      const width = Math.max(run!.rect.width, textRect(this.doc, text, size, { x: run!.rect.x, y: run!.rect.y }, pdf.pages.find((p) => p.id === page)!).width);
+      this.commit(addMark(this.current, { kind: 'text', page, rect: { ...run!.rect, width }, text, size, color: '#000000', ...look, replaces: { rect: run!.rect, text: run!.text } }));
+    };
+    done.addEventListener('click', finish);
+    cancel.addEventListener('click', () => this.closePop());
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        finish();
+      }
+    });
+    this.openPop({ x: client.x, y: client.y, width: 0, height: 0 }, [input, this.row([this.labelled(t.fontFamily, family), boldLabel], [cancel, done])]);
+    input.focus();
+    input.select();
   }
 
   /** Asks what a note or a text says, and puts it at the point. */

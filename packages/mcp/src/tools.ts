@@ -26,6 +26,7 @@ import {
   type Pdf,
   PdfError,
   type Rect,
+  pageText,
   readText,
   removeField,
   removeMark,
@@ -471,6 +472,55 @@ export const TOOLS: Tool[] = [
         next = addMark(next, { kind: 'redaction', page: m.page, rects: m.rects.map((r) => ({ x: r.x - 0.5, y: r.y - 0.5, width: r.width + 1, height: r.height + 1 })), text: m.text });
       return {
         text: `Blacked out ${matches.length} ${matches.length === 1 ? 'place' : 'places'} (${matches.map((m) => `page ${numberOf(pdf, m.page)}`).join(', ')}), for good when the PDF is saved.`,
+        pdf: next,
+      };
+    },
+  },
+  {
+    name: 'replace_text',
+    title: 'Replace text',
+    writes: true,
+    description:
+      'Writes text of the PDF again: the text found is taken out of what its page draws when the PDF is saved (not covered: it is not found any more), and the new is written where it was, on one line, of its size. Every place it is, or the one `occurrence` says. For a few words or a line; a text much longer than the old runs over what follows.',
+    properties: {
+      text: { type: 'string', description: 'The text, as it reads in the PDF, on one line.' },
+      with: { type: 'string', description: 'What it says instead.' },
+      occurrence: OCCURRENCE,
+      page: { ...PAGE, description: 'Only on this page.' },
+      family: { type: 'string', enum: ['sans', 'serif', 'mono'], description: 'The letters of the new text: as the old reads, when left out.' },
+      bold: { type: 'boolean' },
+    },
+    required: ['text', 'with'],
+    async run(pdf, args) {
+      const page = args.page === undefined ? undefined : pageAt(pdf, args.page);
+      let matches = (await searchPdf(pdf, String(args.text ?? ''))).filter((m) => !page || m.page === page.id);
+      if (!matches.length) fail(`"${args.text}" is not in ${page ? `page ${args.page}` : 'the PDF'}.`);
+      if (args.occurrence !== undefined) matches = [await findNear(pdf, args.text, args.occurrence, page)];
+      if (matches.some((m) => m.rects.length > 1)) fail(`"${args.text}" runs over more than one line: replace it a line at a time.`);
+      let next = pdf;
+      for (const m of matches) {
+        const runs = (await pageText(pdf, m.page)).runs;
+        const box = m.rects[0];
+        const run = runs.find(
+          (r) => r.rect.y <= box.y + box.height / 2 && r.rect.y + r.rect.height >= box.y + box.height / 2 && r.rect.x <= box.x + 1 && r.rect.x + r.rect.width >= box.x + box.width - 1,
+        );
+        // The whole run, when it is all of it; else a box a little in, as search places words by their share of the letters.
+        const rect = run && run.text.trim() === m.text.trim() ? run.rect : { ...box, x: box.x + Math.min(2, box.width * 0.05), width: box.width - 2 * Math.min(2, box.width * 0.05) };
+        const size = run?.size ?? box.height / 1.16;
+        next = addMark(next, {
+          kind: 'text',
+          page: m.page,
+          rect: { ...rect, width: Math.max(rect.width, String(args.with).length * size * 0.55) },
+          text: String(args.with ?? ''),
+          size,
+          color: '#000000',
+          family: (args.family as 'sans' | 'serif' | 'mono' | undefined) ?? run?.family,
+          ...(args.bold ? { bold: true } : {}),
+          replaces: { rect, text: m.text },
+        });
+      }
+      return {
+        text: `Replaced ${matches.length} ${matches.length === 1 ? 'place' : 'places'} (${matches.map((m) => `page ${numberOf(pdf, m.page)}`).join(', ')}): the old text goes from the file when the PDF is saved.`,
         pdf: next,
       };
     },

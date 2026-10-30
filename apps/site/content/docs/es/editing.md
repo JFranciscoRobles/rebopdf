@@ -65,3 +65,13 @@ siguiente = attachFile(siguiente, { name: 'cuentas.csv', data, mime: 'text/csv' 
 ```
 
 Los marcadores llevan a las páginas como quedan al guardar; un PDF/A que trae archivos es PDF/A-3.
+
+## El texto de la página, escrito de nuevo
+
+Editar texto (E) reescribe una línea de la página: haz clic en ella, cambia lo que dice (y su letra, si quieres) y Reemplazar. Al guardar el PDF, el texto anterior se quita de lo que dibuja la página, glifo por glifo, conservando el espacio que ocupaba para que el resto de la línea quede donde estaba: no se tapa, desaparece, y ya no se encuentra. El texto nuevo se escribe donde estaba, de su tamaño. En código, una marca de texto con `replaces`:
+
+```ts
+addMark(pdf, { kind: 'text', page, rect, text: '1500 pesos', size: 11, color: '#000000', replaces: { rect, text: '1200 pesos' } });
+```
+
+El texto dibujado dentro de formularios (XObjects) de la página, o en fuentes de códigos que no sean de uno o dos bytes, se tapa en su lugar.

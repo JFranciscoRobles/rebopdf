@@ -119,6 +119,12 @@ The first version to go to npm: 0.1.0 never went, and what it has is here.
   authorities sign with. In the editor, Sign digitally has a field for the
   authority (`signing.timestamp`) and a box to keep what checks it; in the
   MCP server, `timestamp`, `long_term` and `trusted`.
+- **The text of a page, written again** (the Edit text tool, E; a text
+  mark's `replaces`; `replace_text` of the MCP server): the old text taken
+  out of what the page draws, glyph by glyph, by our own reading of its
+  content (matrices, fonts and their widths, spacings), its room kept so
+  the rest of the line stays; the new written in its place, in the family
+  and weight chosen. Text marks take `family`, `bold` and `italic`.
 - **Bookmarks and files carried**: `setOutline`, `addBookmark`,
   `attachFile`, `detachFile`, and `pdf.attachments` read when it is opened;
   written when it is saved, the bookmarks to the pages as they are then,

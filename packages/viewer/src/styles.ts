@@ -152,6 +152,10 @@ const CSS = `
 .rp-mark-note { display: grid; place-items: center; padding: 0; border: 0; background: none; pointer-events: auto; cursor: pointer; }
 .rp-mark-note svg { width: 100%; height: 100%; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25)); }
 .rp-mark-text { white-space: pre-wrap; overflow-wrap: break-word; font-family: Helvetica, Arial, sans-serif; line-height: 1.25; }
+.rp-mark-text[data-family="serif"] { font-family: 'Times New Roman', Times, serif; }
+.rp-mark-text[data-family="mono"] { font-family: 'Courier New', Courier, monospace; }
+.rp-mark-replacing { white-space: pre; overflow: visible; }
+.rp-mark-cover { position: absolute; background: #fff; pointer-events: none; }
 .rp-mark svg { overflow: visible; }
 .rp-mark img { width: 100%; height: 100%; object-fit: contain; }
 .rp-tip { position: absolute; z-index: 4; max-width: 260px; padding: 8px 10px; border-radius: 8px; background: var(--rp-raised); color: var(--rp-text); box-shadow: var(--rp-shadow); font-size: 13px; white-space: pre-wrap; pointer-events: none; }

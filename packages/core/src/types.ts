@@ -110,6 +110,16 @@ export interface TextMark extends MarkBase {
   text: string;
   size: number;
   color: Color;
+  /** Its letters, as the standard fonts have them: sans serif (Helvetica) when left out. A font given to save with is used for all. */
+  family?: 'sans' | 'serif' | 'mono';
+  bold?: boolean;
+  italic?: boolean;
+  /**
+   * The text of the page it is written in place of: its box, and what it
+   * said. When the PDF is saved, that text is taken out of what the page
+   * draws (not covered), and this is written on one line where it was.
+   */
+  replaces?: { rect: Rect; text: string };
 }
 
 /**
