@@ -7,6 +7,7 @@
 import {
   addMark,
   extractPages,
+  insertBlankPage,
   insertPdf,
   type Mark,
   type MarkPatch,
@@ -189,7 +190,11 @@ export class Editor {
     const save = this.doc.createElement('button');
     save.type = 'button';
     save.className = 'rp-button rp-primary';
-    save.append(icon(this.doc, this.options.onSave ? 'check' : 'download', 16), this.options.onSave ? t.save : t.download);
+    const saveLabel = this.doc.createElement('span');
+    saveLabel.className = 'rp-hide-narrow';
+    saveLabel.textContent = this.options.onSave ? t.save : t.download;
+    save.setAttribute('aria-label', saveLabel.textContent);
+    save.append(icon(this.doc, this.options.onSave ? 'check' : 'download', 16), saveLabel);
     save.addEventListener('click', () => void this.saveOrDownload());
     const more = this.button('more', t.more, () => this.moreMenu(more));
     more.setAttribute('aria-haspopup', 'true');
@@ -201,6 +206,7 @@ export class Editor {
     viewer.slots.side.append(
       this.button('rotateBack', t.rotateLeft, () => this.turnPages(-90), 15),
       this.button('rotate', t.rotateRight, () => this.turnPages(90), 15),
+      this.button('pagePlus', t.blankPage, () => void this.blankPage(), 15),
       this.button('scissors', t.extract, () => void this.extract(), 15),
       this.button('trash', t.deletePages, () => this.deletePages(), 15),
     );
@@ -333,6 +339,7 @@ export class Editor {
     }
     this.tool = tool;
     this.refresh();
+    if (tool === 'note' || tool === 'text') this.say(this.t.placeHint);
   }
 
   private color(kind: 'ink' | 'light' = 'ink') {
@@ -355,6 +362,12 @@ export class Editor {
     const at = this.at(event);
     if (!at) return;
     this.selbar!.hidden = true;
+    if (this.tool !== 'select' && this.tool !== 'highlight') event.preventDefault();
+    this.useTool(event, at);
+  }
+
+  /** What the tool does at a place of a page: by the pointer, or by Enter in the middle of the view. */
+  private useTool(event: { clientX: number; clientY: number; target: EventTarget | null; pointerId?: number } & Partial<PointerEvent>, at: NonNullable<ReturnType<Editor['at']>>) {
     switch (this.tool) {
       case 'select': {
         const markEl = (event.target as Element).closest<HTMLElement | SVGElement>('[data-mark]');
@@ -364,26 +377,37 @@ export class Editor {
           this.closePop();
           return;
         }
-        event.preventDefault();
+        event.preventDefault?.();
         this.choose(markEl.dataset.mark!);
-        this.drag(event, at);
+        this.drag(event as PointerEvent, at);
         return;
       }
       case 'note':
       case 'text':
-        event.preventDefault();
         this.writeAt(this.tool, at.id, at.point, { x: event.clientX, y: event.clientY });
         return;
       case 'ink':
-        event.preventDefault();
-        this.drawInk(event, at);
+        this.drawInk(event as PointerEvent, at);
         return;
       case 'sign':
-        event.preventDefault();
         this.placeSignature(at.id, at.point, at.geo);
         return;
       default:
     }
+  }
+
+  /** Puts a note, a text or the signature in the middle of the page in view, for those who do not point. */
+  private placeByKey() {
+    const viewer = this.viewer;
+    const view = viewer?.views.get(viewer.page);
+    if (!viewer || !view) return;
+    const page = view.el.getBoundingClientRect();
+    const sight = viewer.scroll.getBoundingClientRect();
+    const x = page.left + page.width * (this.tool === 'sign' ? 0.35 : 0.4);
+    const y = Math.max(page.top + 24, Math.min(page.bottom - 80, sight.top + sight.height / 2));
+    const event = { clientX: x, clientY: y, target: view.el };
+    const at = this.at(event);
+    if (at) this.useTool(event, at);
   }
 
   /** Moves the mark chosen with the pointer; a click without moving shows what can be done to it. */
@@ -856,6 +880,7 @@ export class Editor {
     };
     const items = [
       ...(this.options.files !== false ? [item('open', t.open, '', () => void this.pick(false)), item('filePlus', t.insert, '', () => void this.pick(true))] : []),
+      item('print', t.print, '', () => void this.viewer?.print()),
       item('download', t.download, '', () => void this.viewer?.download()),
       item('flatten', t.downloadFlat, t.downloadFlatHint, () => void this.downloadFlat()),
     ];
@@ -922,6 +947,15 @@ export class Editor {
     } catch {
       this.toast(this.t.cantDeleteAll);
     }
+  }
+
+  /** A blank page after the page in view, as big as it. */
+  private async blankPage() {
+    if (!this.current) return;
+    const at = this.viewer?.page ? pageNumber(this.current, this.viewer.page) : this.current.pages.length;
+    const next = await insertBlankPage(this.current, at);
+    this.commit(next);
+    this.viewer?.goTo(next.pages[at].id);
   }
 
   private async extract() {
@@ -1153,6 +1187,11 @@ export class Editor {
     if (event.key === 'Escape') {
       if (this.chosen) this.choose('');
       else if (this.tool !== 'select') void this.setTool('select');
+      return;
+    }
+    if (event.key === 'Enter' && (this.tool === 'note' || this.tool === 'text' || this.tool === 'sign') && !target.closest('button')) {
+      event.preventDefault();
+      this.placeByKey();
       return;
     }
     if ((event.key === 'Delete' || event.key === 'Backspace') && this.chosen) {

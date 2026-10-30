@@ -2,7 +2,8 @@
 // joined from another PDF and taken into one of their own; fields filled;
 // marks put on, changed and taken off. The files themselves are never changed.
 
-import { uid } from './open';
+import { PDFDocument } from '@cantoo/pdf-lib';
+import { openPdf, uid } from './open';
 import { type Field, type Mark, type MarkPatch, type NewMark, type Page, type Pdf, PdfError } from './types';
 
 /** The page of this id. */
@@ -81,6 +82,16 @@ export function insertPdf(pdf: Pdf, other: Pdf, at = pdf.pages.length): Pdf {
   const marks = other.marks.map((mark) => ({ ...mark, id: pdf.marks.some((m) => m.id === mark.id) ? uid('m') : mark.id, page: pageIds[mark.page] }));
   const place = Math.max(0, Math.min(at, pdf.pages.length));
   return { ...pdf, sources, pages: [...pdf.pages.slice(0, place), ...pages, ...pdf.pages.slice(place)], fields: [...pdf.fields, ...fields], marks: [...pdf.marks, ...marks] };
+}
+
+/** Puts a blank page before the page at this place (from 0), or at the end: as big as the page before it, or as this size in points. */
+export async function insertBlankPage(pdf: Pdf, at = pdf.pages.length, size?: { width: number; height: number }): Promise<Pdf> {
+  const near = pdf.pages[Math.max(0, Math.min(at, pdf.pages.length) - 1)];
+  const { width, height } = size ?? (near ? pageSize(near) : { width: 595.28, height: 841.89 });
+  const doc = await PDFDocument.create();
+  doc.addPage([width, height]);
+  doc.setProducer('ReboPDF');
+  return insertPdf(pdf, await openPdf(await doc.save()), at);
 }
 
 /** A PDF of these pages alone, in the order they are in, with their fields and marks. */

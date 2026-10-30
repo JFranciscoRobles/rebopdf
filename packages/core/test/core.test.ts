@@ -3,6 +3,7 @@ import {
   addMark,
   extractPages,
   findField,
+  insertBlankPage,
   insertPdf,
   markBounds,
   movePages,
@@ -138,6 +139,17 @@ describe('pages', () => {
     const one = await objects(await savePdf(removePages(pdf, [pdf.pages[0].id])));
     // The first page held the form: its fields, their looks, its content go with it.
     expect(one).toBeLessThan(whole - 10);
+  });
+
+  it('are put in blank, as big as the page before them, and saved with them', async () => {
+    const pdf = rotatePages(await samplePdf('en'), [], 0);
+    const more = await insertBlankPage(rotatePages(pdf, [pdf.pages[0].id], 90), 1);
+    expect(more.pages).toHaveLength(3);
+    expect(pageSize(more.pages[1])).toEqual({ width: 841.89, height: 595.28 });
+    expect((await insertBlankPage(pdf, 0, { width: 200, height: 100 })).pages[0].box).toMatchObject({ width: 200, height: 100 });
+    const back = await reopen(more);
+    expect(back.pages).toHaveLength(3);
+    expect((await pageText(back, back.pages[1].id)).text).toBe('');
   });
 
   it('of the same PDF joined twice keep apart', async () => {

@@ -6,6 +6,7 @@ export {
   extractPages,
   fieldsOn,
   findField,
+  insertBlankPage,
   insertPdf,
   markId,
   marksOn,

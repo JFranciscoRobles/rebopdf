@@ -29,6 +29,8 @@ export interface ViewerOptions {
   page?: string;
   /** The button to download the PDF. Shown unless false. */
   download?: boolean;
+  /** The button to print the PDF. Shown unless false. */
+  print?: boolean;
   /** Whether the fields of a form can be filled. They can unless false. */
   fill?: boolean;
   /** Told the Pdf after a field is filled. */
@@ -121,7 +123,7 @@ export class Viewer {
     const bar = make('div', 'rp-bar');
     bar.setAttribute('role', 'toolbar');
     bar.setAttribute('aria-label', t.viewer);
-    this.slots = { start: make('div', 'rp-group'), tools: make('div', 'rp-group'), end: make('div', 'rp-group'), side: make('div', 'rp-group') };
+    this.slots = { start: make('div', 'rp-group'), tools: make('div', 'rp-group rp-tools'), end: make('div', 'rp-group'), side: make('div', 'rp-group') };
     this.sideButton = this.button('sidebar', t.showPages, () => this.toggleThumbnails());
     this.sideButton.setAttribute('aria-expanded', 'false');
     this.titleEl = make('div', 'rp-title');
@@ -145,7 +147,7 @@ export class Viewer {
       const value = this.zoomSelect.value;
       this.setZoom(Number.isNaN(Number(value)) ? (value as Zoom) : Number(value));
     });
-    const zoomGroup = make('div', 'rp-group');
+    const zoomGroup = make('div', 'rp-group rp-hide-narrow');
     zoomGroup.append(
       this.button('minus', t.zoomOut, () => this.step(-1)),
       this.zoomSelect,
@@ -154,6 +156,11 @@ export class Viewer {
     const searchButton = this.button('search', t.search, () => this.openSearch());
     const right = make('div', 'rp-group');
     right.append(searchButton);
+    if (options.print !== false) {
+      const print = this.button('print', t.print, () => void this.print());
+      print.classList.add('rp-hide-narrow');
+      right.append(print);
+    }
     if (options.download !== false) right.append(this.button('download', t.download, () => void this.download()));
     const start = make('div', 'rp-group');
     start.append(this.sideButton, this.titleEl);
@@ -166,7 +173,7 @@ export class Viewer {
       pagebox,
       make('div', 'rp-sep rp-hide-narrow'),
       zoomGroup,
-      make('div', 'rp-sep'),
+      make('div', 'rp-sep rp-hide-narrow'),
       right,
       this.slots.end,
     );
@@ -250,6 +257,7 @@ export class Viewer {
       this.setZoom(Math.max(0.1, Math.min(6, this.scale * Math.exp(-event.deltaY / 300))));
     };
     this.scroll.addEventListener('wheel', onWheel, { passive: false });
+    this.pinching();
     this.cleanup.push(
       () => this.scroll.removeEventListener('scroll', onScroll),
       () => this.root.removeEventListener('keydown', onKey),
@@ -261,6 +269,33 @@ export class Viewer {
     this.layout(false);
     if (options.page) this.goTo(options.page);
     this.track();
+  }
+
+  /** Two fingers apart or together on the pages zoom them, as on a phone everything is zoomed. */
+  private pinching() {
+    let start = 0;
+    let from = 1;
+    let frame = 0;
+    const apart = (touches: TouchList) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+    this.scroll.addEventListener('touchstart', (event) => {
+      if (event.touches.length !== 2) return;
+      start = apart(event.touches);
+      from = this.zoomLevel;
+    });
+    this.scroll.addEventListener(
+      'touchmove',
+      (event) => {
+        if (event.touches.length !== 2 || !start) return;
+        event.preventDefault();
+        const ratio = apart(event.touches) / start;
+        cancelAnimationFrame(frame);
+        frame = requestAnimationFrame(() => this.setZoom(Math.max(0.25, Math.min(4, from * ratio))));
+      },
+      { passive: false },
+    );
+    this.scroll.addEventListener('touchend', (event) => {
+      if (event.touches.length < 2) start = 0;
+    });
   }
 
   private button(name: IconName, label: string, run: () => void): HTMLButtonElement {
@@ -400,8 +435,10 @@ export class Viewer {
         number.className = 'rp-thumb-number';
         li.append(sheet, number);
         li.addEventListener('click', (event) => {
-          if ((event.target as Element).closest('button')) return;
+          if ((event.target as Element).closest('button') || event.shiftKey || event.metaKey || event.ctrlKey) return;
           this.goTo(li!.dataset.page!);
+          // On a phone the thumbnails lie over the pages: they go once one is chosen.
+          if (this.doc.defaultView?.matchMedia('(max-width: 640px)').matches) this.toggleThumbnails(false);
         });
         this.thumbObserver.observe(li);
       }
@@ -738,6 +775,31 @@ export class Viewer {
     a.download = this.pdf.name.endsWith('.pdf') ? this.pdf.name : `${this.pdf.name}.pdf`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  }
+
+  /** Prints the PDF as it is now, as the browser prints a PDF. */
+  async print(): Promise<void> {
+    const bytes = await savePdf(this.pdf);
+    const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' }));
+    const frame = this.doc.createElement('iframe');
+    frame.setAttribute('aria-hidden', 'true');
+    frame.tabIndex = -1;
+    Object.assign(frame.style, { position: 'fixed', right: '0', bottom: '0', width: '0', height: '0', border: '0' });
+    frame.addEventListener('load', () => {
+      try {
+        frame.contentWindow?.focus();
+        frame.contentWindow?.print();
+      } catch {
+        // A browser that does not print a PDF in a frame opens it to be printed from there.
+        this.doc.defaultView?.open(url, '_blank');
+      }
+      setTimeout(() => {
+        frame.remove();
+        URL.revokeObjectURL(url);
+      }, 60_000);
+    });
+    frame.src = url;
+    this.doc.body.append(frame);
   }
 
   destroy(): void {

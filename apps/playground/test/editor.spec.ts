@@ -250,3 +250,58 @@ test('with no PDF, one is asked for and opened', async ({ page }) => {
   await expect(page.locator('.rp-thumb')).toHaveCount(2);
   await expect(page.locator('.rp-title')).toHaveText('Contrato');
 });
+
+test('a note, a text and a signature are put with the keyboard alone', async ({ page }) => {
+  await page.keyboard.press('n');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('By the keyboard');
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await expect(page.getByRole('button', { name: 'Note: By the keyboard' })).toBeVisible();
+  // The focus is back in the pages: the next tool is a key away.
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('t');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Typed');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Enter');
+  await expect(pageEl(page, 1).locator('.rp-mark-text')).toHaveText('Typed');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('s');
+  await page.getByRole('tab', { name: 'Type' }).click();
+  await page.getByRole('textbox', { name: 'Your name' }).fill('Ana');
+  await page.getByRole('button', { name: 'Place it' }).click();
+  await page.locator('.rp-scroll').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.rp-mark-signature')).toHaveCount(1);
+  expect((await state(page)).marks.map((m) => m.kind)).toEqual(['note', 'text', 'signature']);
+});
+
+test('a blank page goes after the page in view, as big as it', async ({ page }) => {
+  await page.getByRole('button', { name: 'Insert a blank page' }).click();
+  await expect(page.locator('.rp-thumb')).toHaveCount(3);
+  const pages = (await state(page)).pages;
+  expect(pages).toHaveLength(3);
+  const [one, blank] = [(await pageEl(page, 1).boundingBox())!, (await pageEl(page, 2).boundingBox())!];
+  expect(blank.width).toBeCloseTo(one.width, 0);
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.locator('.rp-thumb')).toHaveCount(2);
+});
+
+test.describe('on a phone', () => {
+  test.use({ viewport: { width: 390, height: 780 }, hasTouch: true });
+
+  test('the tools float at the foot, and nothing goes wider than the screen', async ({ page }) => {
+    const tools = page.getByRole('group', { name: 'Tools' });
+    const box = (await tools.boundingBox())!;
+    expect(box.y + box.height).toBeGreaterThan(700);
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(390);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+    await page.getByRole('button', { name: 'Show pages' }).click();
+    await page.locator('.rp-thumb').nth(1).click();
+    await expect(page.locator('.rp-side')).toBeHidden();
+    await expect(page.getByRole('textbox', { name: 'Page number' })).toHaveValue('2');
+  });
+});

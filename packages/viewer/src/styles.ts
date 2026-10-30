@@ -93,7 +93,7 @@ const CSS = `
 .rp-body { position: relative; display: flex; flex: 1 1 auto; min-height: 0; }
 .rp-side { display: flex; flex-direction: column; flex: none; width: 184px; background: var(--rp-chrome); border-right: 1px solid var(--rp-border); min-height: 0; }
 .rp-side[hidden] { display: none; }
-.rp-side-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 4px; color: var(--rp-muted); font-size: 12px; font-weight: 600; }
+.rp-side-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; row-gap: 4px; padding: 10px 12px 4px; color: var(--rp-muted); font-size: 12px; font-weight: 600; }
 .rp-thumbs { flex: 1 1 auto; overflow-y: auto; padding: 8px 12px 16px; list-style: none; margin: 0; }
 .rp-thumb { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 0 0 12px; padding: 8px 6px 6px; border-radius: 10px; cursor: pointer; }
 .rp-thumb:hover { background: var(--rp-hover); }
@@ -103,7 +103,7 @@ const CSS = `
 .rp-thumb-sheet canvas { display: block; width: 100%; height: 100%; }
 .rp-thumb-number { color: var(--rp-muted); font-size: 12px; }
 
-.rp-scroll { position: relative; flex: 1 1 auto; min-width: 0; overflow: auto; outline: none; }
+.rp-scroll { position: relative; flex: 1 1 auto; min-width: 0; overflow: auto; outline: none; touch-action: pan-x pan-y; }
 .rp-pages { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 24px 16px 48px; min-width: min-content; }
 .rp-page { position: relative; flex: none; background: #fff; box-shadow: var(--rp-page-shadow); --scale-round-x: 1px; --scale-round-y: 1px; }
 .rp-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
@@ -142,6 +142,10 @@ select.rp-field { padding: 0 2px; }
 .rp-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 @media (max-width: 640px) {
+  /* The tools float at the foot of the pages, where a thumb reaches them. */
+  .rp-tools:not(:empty) { position: absolute; z-index: 7; left: 50%; bottom: 16px; padding: 4px; border: 1px solid var(--rp-border); border-radius: 14px; background: var(--rp-raised); box-shadow: var(--rp-shadow); transform: translateX(-50%); }
+  .rp-tools:not(:empty) .rp-button { min-width: 40px; height: 40px; }
+  .rp-root:has(.rp-tools:not(:empty)) .rp-pages { padding-bottom: 96px; }
   .rp-side { position: absolute; z-index: 6; inset: 0 auto 0 0; box-shadow: var(--rp-shadow); }
   .rp-title, .rp-hide-narrow { display: none; }
   .rp-find { left: 8px; right: 8px; }
