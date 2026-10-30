@@ -304,6 +304,15 @@ test.describe('on a phone', () => {
     await expect(page.locator('.rp-side')).toBeHidden();
     await expect(page.getByRole('textbox', { name: 'Page number' })).toHaveValue('2');
   });
+
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`nothing an accessibility check finds, ${scheme}`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.getByRole('button', { name: 'Show pages' }).click();
+      const results = await new AxeBuilder({ page }).analyze();
+      expect(results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
+    });
+  }
 });
 
 test('a PDF with a password is asked for it, opened, and its pages drawn', async ({ page }) => {
