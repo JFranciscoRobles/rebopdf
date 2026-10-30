@@ -164,6 +164,18 @@ export interface Pdf {
   taken?: Record<string, string[]>;
   /** The digital signatures of the files, as they say who signed and when. */
   signatures?: Signature[];
+  /**
+   * The words recognized in pictures of pages (by `@rebopdf/ocr`), by page:
+   * found and selected as the text of the page is, and written unseen over
+   * it when the PDF is saved.
+   */
+  recognized?: Record<string, Word[]>;
+}
+
+/** A word of a page, and the box it takes. */
+export interface Word {
+  text: string;
+  rect: Rect;
 }
 
 /** A digital signature a file carries. */

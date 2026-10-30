@@ -6,7 +6,7 @@
 import { pageById } from './edit';
 import { outside, redactedOn } from './geometry';
 import { readerFor } from './pdfjs';
-import { type Pdf, PdfError, type Rect } from './types';
+import { type Pdf, PdfError, type Rect, type Word } from './types';
 
 /** A run of text on a page, from `start` in the text of the page. */
 export interface TextRun {
@@ -45,6 +45,30 @@ export async function pageText(pdf: Pdf, id: string): Promise<PageText> {
       });
     }
     if (item.hasEOL) text += '\n';
+  }
+  // The words recognized in a picture of the page, a line at a time.
+  const words = pdf.recognized?.[id];
+  if (words?.length) {
+    if (text && !text.endsWith('\n')) text += '\n';
+    const lines: Word[][] = [];
+    for (const word of [...words].sort((a, b) => b.rect.y + b.rect.height / 2 - (a.rect.y + a.rect.height / 2) || a.rect.x - b.rect.x)) {
+      const line = lines.at(-1);
+      const middle = word.rect.y + word.rect.height / 2;
+      if (line && Math.abs(line[0].rect.y + line[0].rect.height / 2 - middle) < Math.min(line[0].rect.height, word.rect.height) / 2) line.push(word);
+      else lines.push([word]);
+    }
+    for (const line of lines) {
+      line.sort((a, b) => a.rect.x - b.rect.x);
+      line.forEach((word, i) => {
+        const pieces = outside(word.text, word.rect, redacted);
+        pieces.forEach((piece, j) => {
+          if (i || j) text += ' ';
+          runs.push({ text: piece.text, start: text.length, rect: piece.rect });
+          text += piece.text;
+        });
+      });
+      text += '\n';
+    }
   }
   return { page: id, text: text.trimEnd(), runs };
 }

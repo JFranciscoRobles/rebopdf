@@ -26,13 +26,13 @@ import {
 } from '@cantoo/pdf-lib';
 import { outside, overlaps } from './geometry';
 import { freshReaderOf, pdfjs, type PdfJsDocument } from './pdfjs';
-import type { Field, Page, Rect } from './types';
+import type { Field, Page, Rect, Word } from './types';
 
 /** Pixels a point of a page is drawn as: twice as sharp as the screen at 100%, 144 to the inch. */
 export const REDACTED_SCALE = 2;
 
 /** What a canvas PDF.js draws on gives as a PNG, in Node (@napi-rs/canvas) or in a browser. */
-async function png(canvas: unknown): Promise<Uint8Array> {
+export async function png(canvas: unknown): Promise<Uint8Array> {
   const c = canvas as {
     toBuffer?: (mime: string) => Uint8Array;
     convertToBlob?: (options: { type: string }) => Promise<Blob>;
@@ -43,6 +43,36 @@ async function png(canvas: unknown): Promise<Uint8Array> {
   const blob = await new Promise<Blob | null>((done) => c.toBlob!(done, 'image/png'));
   if (!blob) throw new Error('The page could not be drawn as a picture.');
   return new Uint8Array(await blob.arrayBuffer());
+}
+
+/** A run of text to write unseen: its letters, its size, how wide it is to be, and its matrix (as a matrix of text, its size taken out). */
+export interface UnseenRun {
+  text: string;
+  size: number;
+  width: number;
+  matrix: [number, number, number, number, number, number];
+}
+
+/** A run of text by its box, written as the box has it: on a line, as big as the box is tall. */
+export const unseenOf = (run: { text: string; rect: Rect }): UnseenRun => {
+  const size = run.rect.height / 1.16;
+  return { text: run.text, size, width: run.rect.width, matrix: [1, 0, 0, 1, run.rect.x, run.rect.y + size * 0.22] };
+};
+
+/** Writes text over a page, unseen: found, selected and copied where it is, drawn nowhere. */
+export function writeUnseen(out: PDFPage, runs: UnseenRun[], font: PDFFont): void {
+  if (!runs.length) return;
+  const key = out.node.newFontDictionary(font.name, font.ref);
+  const letters = new Set(font.getCharacterSet());
+  const ops: PDFOperator[] = [pushGraphicsState(), beginText(), setTextRenderingMode(TextRenderingMode.Invisible)];
+  for (const run of runs) {
+    const str = [...run.text].filter((ch) => letters.has(ch.codePointAt(0)!)).join('');
+    if (!str.trim()) continue;
+    const natural = font.widthOfTextAtSize(str, run.size);
+    ops.push(setFontAndSize(key, run.size), setTextMatrix(...run.matrix), setCharacterSqueeze(natural > 0 ? (100 * run.width) / natural : 100), showText(font.encodeText(str)));
+  }
+  ops.push(endText(), popGraphicsState());
+  out.pushOperators(...ops);
 }
 
 /** The files PDF.js draws redacted pages from, each read once for a saving and let go after. */
@@ -65,7 +95,7 @@ export class Redactor {
    * out of them unseen over it. `bytes` are those PDF.js draws the page from,
    * `fields` the fields of its file, whose values are drawn into the picture.
    */
-  async redact(out: PDFPage, page: Page, bytes: Uint8Array, boxes: Rect[], fields: Field[], font: () => Promise<PDFFont>): Promise<void> {
+  async redact(out: PDFPage, page: Page, bytes: Uint8Array, boxes: Rect[], fields: Field[], font: () => Promise<PDFFont>, recognized: Word[] = []): Promise<void> {
     const lib = await pdfjs();
     const reader = await this.reader(bytes);
     const proxy = await reader.getPage(page.index + 1);
@@ -124,10 +154,7 @@ export class Redactor {
     out.drawImage(picture, { x: box.x, y: box.y, width: box.width, height: box.height });
 
     // The text out of the boxes, unseen over the picture: found and selected where it is seen.
-    const written = await font();
-    const key = out.node.newFontDictionary(written.name, written.ref);
-    const ops: PDFOperator[] = [pushGraphicsState(), beginText(), setTextRenderingMode(TextRenderingMode.Invisible)];
-    const letters = new Set(written.getCharacterSet());
+    const runs: UnseenRun[] = [];
     for (const item of text.items) {
       if (!('str' in item) || !item.str.trim()) continue;
       const [a, b, c, d, e, f] = item.transform as number[];
@@ -137,21 +164,11 @@ export class Redactor {
       const runBox = { x: e, y: f - size * 0.22, width: item.width, height: size * 1.16 };
       // Text turned or slanted goes whole, or not at all when a box touches it.
       const pieces = straight ? outside(item.str, runBox, boxes) : boxes.some((r) => overlaps(runBox, r)) ? [] : [{ text: item.str, from: 0, rect: runBox }];
-      for (const piece of pieces) {
-        const str = [...piece.text].filter((ch) => letters.has(ch.codePointAt(0)!)).join('');
-        if (!str.trim()) continue;
-        const natural = written.widthOfTextAtSize(str, size);
-        const x = straight ? piece.rect.x : e;
-        ops.push(
-          setFontAndSize(key, size),
-          setTextMatrix(a / size, b / size, c / size, d / size, x, f),
-          setCharacterSqueeze(natural > 0 ? (100 * piece.rect.width) / natural : 100),
-          showText(written.encodeText(str)),
-        );
-      }
+      for (const piece of pieces) runs.push({ text: piece.text, size, width: piece.rect.width, matrix: [a / size, b / size, c / size, d / size, straight ? piece.rect.x : e, f] });
     }
-    ops.push(endText(), popGraphicsState());
-    out.pushOperators(...ops);
+    // What was recognized in a picture of the page, out of the boxes too.
+    for (const run of recognized) for (const piece of outside(run.text, run.rect, boxes)) runs.push(unseenOf(piece));
+    writeUnseen(out, runs, await font());
   }
 
   /** Lets go of the files read. */

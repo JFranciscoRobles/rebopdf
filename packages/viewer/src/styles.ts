@@ -107,6 +107,9 @@ const CSS = `
 .rp-outline-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
 .rp-outline-row:not(:has(.rp-outline-toggle)) { padding-left: calc(var(--depth) * 12px + 22px); }
 .rp-links { pointer-events: none; }
+.rp-recognized { line-height: 1; }
+.rp-recognized span { position: absolute; color: transparent; white-space: pre; cursor: text; transform-origin: 0 0; font-family: sans-serif; }
+.rp-recognized ::selection { background: rgba(0, 0, 255, 0.25); color: transparent; }
 .rp-link { position: absolute; pointer-events: auto; border-radius: 2px; }
 .rp-link:hover { background: rgba(37, 99, 235, 0.12); }
 .rp-thumbs { flex: 1 1 auto; overflow-y: auto; padding: 8px 12px 16px; list-style: none; margin: 0; }

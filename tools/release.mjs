@@ -1,4 +1,4 @@
-// Publishes the five packages, each its `dist/` as `tools/package.mjs` made it,
+// Publishes the six packages, each its `dist/` as `tools/package.mjs` made it,
 // in the order they use each other, so none is on npm before what it needs.
 // A version already on npm is passed over, so a release cut halfway is gone on
 // with by running it again. `--dry-run` says what it would publish.
@@ -12,7 +12,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const ORDER = ['core', 'viewer', 'editor', 'react', 'mcp'];
+const ORDER = ['core', 'viewer', 'editor', 'ocr', 'react', 'mcp'];
 const dry = process.argv.includes('--dry-run');
 
 const versions = new Set(ORDER.map((name) => JSON.parse(readFileSync(join(root, 'packages', name, 'package.json'), 'utf8')).version));

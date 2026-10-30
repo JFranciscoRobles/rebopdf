@@ -11,6 +11,7 @@
   "dependencies": {
     "@rebopdf/core": "*",
     "@rebopdf/editor": "*",
+    "@rebopdf/ocr": "*",
     "@rebopdf/viewer": "*",
     "pdfjs-dist": "6.4.299"
   }

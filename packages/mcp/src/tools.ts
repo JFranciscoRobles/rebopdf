@@ -31,6 +31,7 @@ import {
   searchPdf,
   setField,
 } from '@rebopdf/core';
+import { recognizeText } from '@rebopdf/ocr';
 
 export type Args = Record<string, unknown>;
 
@@ -48,6 +49,8 @@ export interface Tool {
 /** What the tools are given of the files around them: a picture read, for a signature. */
 export interface Files {
   image(path: string): Promise<{ dataUrl: string; width: number; height: number }>;
+  /** Where the data of the languages of the recognition of text is kept. */
+  ocrCache?: string;
 }
 
 /** What the assistant asked wrong: said to it as the result, for it to put right. */
@@ -163,6 +166,27 @@ export const TOOLS: Tool[] = [
         return `## Page ${numberOf(pdf, page.id)} (${round(width)} × ${round(height)} pt${page.rotation ? `, turned ${page.rotation}°` : ''})\n\n${t.text || '(no text: it may be a scanned image)'}`;
       });
       return { text: `${pdf.name}: ${pdf.pages.length} pages, ${pdf.fields.length} form fields, ${pdf.marks.length} marks (see list_marks).\n\n${out.join('\n\n')}` };
+    },
+  },
+  {
+    name: 'recognize_text',
+    title: 'Recognize the text of scanned pages',
+    writes: true,
+    description:
+      'Reads the text of pages that are pictures (scans), with Tesseract, so that read_pdf, search_pdf, highlight_text and redact_text work on them, and it is saved unseen over them. Pages with text of their own are passed over unless named. The data of each language is fetched the first time it is needed.',
+    properties: {
+      pages: { ...PAGES, description: `${PAGES.description} Those with no text, when left out.` },
+      languages: { type: 'array', items: { type: 'string' }, description: 'The languages, as Tesseract names them: "eng", "spa", "fra", "deu", "por"… English and Spanish when left out.' },
+    },
+    async run(pdf, args, files) {
+      const next = await recognizeText(pdf, {
+        ...(args.pages ? { pages: pagesOf(pdf, args.pages) } : {}),
+        ...(Array.isArray(args.languages) ? { languages: args.languages.map(String) } : {}),
+        ...(files.ocrCache ? { cachePath: files.ocrCache } : {}),
+      });
+      if (next === pdf) return { text: 'Every page has text of its own: none was read. Name pages to read them all the same.' };
+      const read = Object.entries(next.recognized ?? {}).filter(([id, words]) => pdf.recognized?.[id] !== words);
+      return { text: `Read ${read.length} ${read.length === 1 ? 'page' : 'pages'}: ${read.map(([id, words]) => `page ${numberOf(next, id)} (${words.length} words)`).join(', ')}.`, pdf: next };
     },
   },
   {

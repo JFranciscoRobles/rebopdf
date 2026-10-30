@@ -4,7 +4,8 @@
 // Node only; `main.ts` runs it.
 
 import { readFile, writeFile } from 'node:fs/promises';
-import { basename, extname, isAbsolute, relative, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { basename, extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { checkSignatures, comparePdfs, extractPages, insertPdf, openPdf, type Pdf, PdfError, savePdf, savesIncrementally, signPdf, whyNotIncremental } from '@rebopdf/core';
 import { version } from '../package.json';
 import { type Files, findTool, pagesOf, type Tool, TOOLS, ToolError } from './tools';
@@ -179,6 +180,7 @@ export function createPdfServer(options: ServerOptions = {}) {
     return found;
   };
   const files: Files = {
+    ocrCache: join(tmpdir(), 'rebopdf-tessdata'),
     async image(path) {
       const bytes = new Uint8Array(await readFile(allowed(path)));
       const { width, height, type } = imageSize(bytes);

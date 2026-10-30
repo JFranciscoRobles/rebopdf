@@ -4,7 +4,7 @@
 
 import { PDFDocument } from '@cantoo/pdf-lib';
 import { openPdf, uid } from './open';
-import { type Field, type FieldKind, type Mark, type MarkPatch, type NewMark, type Page, type Pdf, PdfError, type Rect } from './types';
+import { type Field, type FieldKind, type Mark, type MarkPatch, type NewMark, type Page, type Pdf, PdfError, type Rect, type Word } from './types';
 
 /** The page of this id. */
 export const pageById = (pdf: Pdf, id: string): Page | undefined => pdf.pages.find((page) => page.id === id);
@@ -85,6 +85,7 @@ export function insertPdf(pdf: Pdf, other: Pdf, at = pdf.pages.length): Pdf {
     const all = { ...mine, ...Object.fromEntries(Object.entries(theirs ?? {}).map(([id, value]) => [renamed[id], value])) };
     return Object.keys(all).length ? all : undefined;
   };
+  const recognized = { ...pdf.recognized, ...Object.fromEntries(Object.entries(other.recognized ?? {}).map(([id, words]) => [pageIds[id], words])) };
   const drawn = byFile(pdf.drawn, other.drawn);
   const taken = byFile(pdf.taken, other.taken);
   const signatures = [...(pdf.signatures ?? []), ...(other.signatures ?? []).map((s) => ({ ...s, source: renamed[s.source] }))];
@@ -97,6 +98,7 @@ export function insertPdf(pdf: Pdf, other: Pdf, at = pdf.pages.length): Pdf {
     ...(drawn ? { drawn } : {}),
     ...(taken ? { taken } : {}),
     ...(signatures.length ? { signatures } : {}),
+    ...(Object.keys(recognized).length ? { recognized } : {}),
   };
 }
 
@@ -132,7 +134,17 @@ function keepPages(pdf: Pdf, keep: (page: Page) => boolean): Pdf {
   const pages = pdf.pages.filter(keep);
   const ids = new Set(pages.map((page) => page.id));
   const fields = pdf.fields.map((field) => ({ ...field, widgets: field.widgets.filter((widget) => ids.has(widget.page)) })).filter((field) => field.widgets.length);
-  return { ...pdf, pages, fields, marks: pdf.marks.filter((mark) => ids.has(mark.page)) };
+  const recognized = pdf.recognized && Object.fromEntries(Object.entries(pdf.recognized).filter(([id]) => ids.has(id)));
+  return { ...pdf, pages, fields, marks: pdf.marks.filter((mark) => ids.has(mark.page)), ...(recognized ? { recognized } : {}) };
+}
+
+/** Gives a page the words recognized in a picture of it; none takes them away. */
+export function setRecognized(pdf: Pdf, page: string, words: Word[]): Pdf {
+  if (!pageById(pdf, page)) throw new PdfError('not-found', `There is no page ${page}.`);
+  const recognized = { ...pdf.recognized };
+  if (words.length) recognized[page] = words;
+  else delete recognized[page];
+  return { ...pdf, recognized };
 }
 
 /** A new id for a mark. */

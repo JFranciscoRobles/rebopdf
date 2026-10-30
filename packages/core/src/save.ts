@@ -47,7 +47,7 @@ import { dropAnnotations } from './annotations';
 import { overlaps } from './geometry';
 import { dropUnreachable, OBJECTS_AT_ONCE, writeDocument } from './objects';
 import { formOf, loadDocument, readField } from './open';
-import { Redactor } from './redact';
+import { Redactor, unseenOf, writeUnseen } from './redact';
 import { type Color, type Field, type HighlightMark, type InkMark, type Mark, type NoteMark, type Pdf, PdfError, type Point, type Rect, type SignatureMark, type TextMark } from './types';
 
 export interface SaveOptions {
@@ -150,7 +150,10 @@ export async function savePdf(pdf: Pdf, options: SaveOptions = {}): Promise<Uint
       const blacked = boxes.get(page.id);
       if (blacked) {
         const fields = pdf.fields.filter((field) => field.source === page.source);
-        await redactor.redact(out, page, pdf.drawn?.[page.source] ?? pdf.sources[page.source], blacked, fields, helvetica);
+        await redactor.redact(out, page, pdf.drawn?.[page.source] ?? pdf.sources[page.source], blacked, fields, helvetica, pdf.recognized?.[page.id]);
+      } else if (pdf.recognized?.[page.id]?.length) {
+        // The words recognized in the picture of the page, unseen over it, as a scanner that reads them writes them.
+        writeUnseen(out, pdf.recognized[page.id].map(unseenOf), await helvetica());
       }
       for (const mark of pdf.marks) {
         if (mark.page !== page.id || mark.kind === 'redaction') continue;

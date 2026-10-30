@@ -65,6 +65,7 @@ await writeFile('filled.pdf', await savePdf(pdf)); // or { flatten: true }
 - **The keyboard:** every tool by a key, Enter to put a note, a text or a signature in the middle of the view, the thumbnails moved by Alt and the arrows.
 - **One history:** ⌘Z and ⇧⌘Z through every change, fields typed in included.
 - **Blacking out, for good:** boxes drawn, or text selected, are blacked out when the PDF is saved, and what was under them (text, pictures, what fields hold) is taken out of the file, not only covered. Pages with boxes are saved as pictures with the boxes burnt in, their other text kept unseen over them, to be found and selected.
+- **Scanned pages:** their text recognized with Tesseract (`@rebopdf/ocr`), then found, selected and blacked out as any text, and saved unseen over the pages.
 - **Versions compared:** another version of the PDF side by side, what was taken out in red and what was put in in green, word by word, and what its form holds that changed.
 - **Digital signatures:** a PDF signed with your certificate (a .p12 or .pfx, or a .cer and its .key, as e.firma comes), in a signature field or not seen, as Acrobat checks signatures; and the signatures of a PDF checked: intact, by whom, and whether it was added to after. The certificate stays in the browser.
 - **Signed PDFs:** what is changed in a PDF with a digital signature is added after its bytes as they came, so the signature still holds; the editor says who signed, and whether the signature still holds once saved.
@@ -77,6 +78,7 @@ await writeFile('filled.pdf', await savePdf(pdf)); // or { flatten: true }
 | `@rebopdf/core` | The engine, with no DOM, in the browser and in Node: a PDF opened as its pages, its fields and its marks; what is done to it (immutable); its text read and searched; the PDF saved. On [PDF.js](https://mozilla.github.io/pdf.js/) to read and [pdf-lib](https://github.com/cantoo-scribe/pdf-lib) to write. |
 | `@rebopdf/viewer` | The viewer, with no framework: the pages, thumbnails, zoom, search, the text to select, and the fields and marks over them. |
 | `@rebopdf/editor` | The editor, with no framework: the viewer with tools, the thumbnails to act on, files opened and dropped, the history and saving. |
+| `@rebopdf/ocr` | The text of scanned pages recognized with [Tesseract](https://tesseract.projectnaptha.com/), for the engine, the editor and the MCP server. |
 | `@rebopdf/react` | `PdfViewer`, `PdfEditor` and `usePdf`. |
 | `@rebopdf/mcp` | An MCP server (`rebopdf-mcp`) so that Claude and other assistants read, search, fill, mark, sign and put in order PDF files. |
 | `@rebopdf/playground` | Where everything is tried: `npm run dev` · :5300 |

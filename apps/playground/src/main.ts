@@ -4,6 +4,7 @@
 
 import { samplePdf, usePdfWorker } from '@rebopdf/core';
 import { mountEditor } from '@rebopdf/editor';
+import { recognizeText } from '@rebopdf/ocr';
 import { mountViewer } from '@rebopdf/viewer';
 import worker from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
 
@@ -15,6 +16,6 @@ const app = document.querySelector<HTMLElement>('#app')!;
 if (params.has('viewer')) {
   Object.assign(window, { viewer: mountViewer(app, { pdf: await samplePdf(locale), locale }) });
 } else {
-  const editor = mountEditor(app, { pdf: params.has('empty') ? undefined : await samplePdf(locale), locale, author: 'Ana' });
+  const editor = mountEditor(app, { pdf: params.has('empty') ? undefined : await samplePdf(locale), locale, author: 'Ana', recognize: recognizeText });
   Object.assign(window, { editor });
 }

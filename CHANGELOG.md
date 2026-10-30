@@ -67,6 +67,14 @@ The first version to go to npm: 0.1.0 never went, and what it has is here.
   red on the first, what was put in in green on the second, side by side,
   the changes listed and brought into view one by one, and what the fields
   of their forms hold that changed.
+- **Scanned pages read** (`@rebopdf/ocr`: `recognizeText`; Recognize text
+  in the editor, given `recognize`; `recognize_text` of the MCP server):
+  the pages that are pictures drawn and read by Tesseract, in the browser
+  and in Node, in the languages asked (English and Spanish when not), their
+  words put where they are seen (`pdf.recognized`, `setRecognized`), to be
+  found, selected, highlighted and blacked out as text is, and written
+  unseen over the pages when the PDF is saved. A big title beside a dark
+  band of a scan Tesseract may not read.
 - Saved by adding to the file, only what changed is written: the fields
   that hold what they held, and what the file says of itself, stay as they
   were.

@@ -590,3 +590,34 @@ test('a PDF is compared with another version of it, side by side', async ({ page
   await comparison.getByRole('button', { name: 'Close' }).click();
   await expect(comparison).toHaveCount(0);
 });
+
+test('the text of a scanned page is recognized, found and selected', async ({ page }) => {
+  test.setTimeout(120_000);
+  const { freshReaderOf, png, samplePdfBytes: bytesOf } = await import('@rebopdf/core');
+  const { PDFDocument } = await import('@cantoo/pdf-lib');
+  const reader = await freshReaderOf(await bytesOf('en'));
+  const first = await reader.getPage(1);
+  const viewport = first.getViewport({ scale: 2.5 });
+  const { canvas, context } = (reader as unknown as { canvasFactory: { create(w: number, h: number): { canvas: unknown; context: CanvasRenderingContext2D } } }).canvasFactory.create(
+    viewport.width,
+    viewport.height,
+  );
+  context.fillStyle = '#fff';
+  context.fillRect(0, 0, viewport.width, viewport.height);
+  await first.render({ canvas: canvas as HTMLCanvasElement, viewport }).promise;
+  const doc = await PDFDocument.create();
+  doc.addPage([595.28, 841.89]).drawImage(await doc.embedPng(await png(canvas)), { x: 0, y: 0, width: 595.28, height: 841.89 });
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'More' }).click();
+  await page.getByRole('menuitem', { name: 'Open a PDF…' }).click();
+  await (await chooser).setFiles({ name: 'Scan.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await doc.save()) });
+  await expect(page.locator('.rp-title')).toHaveText('Scan');
+  await page.getByRole('button', { name: 'More' }).click();
+  await page.getByRole('menuitem', { name: /Recognize text/ }).click();
+  await expect(page.getByRole('status')).toHaveText(/Read the text of 1 pages/, { timeout: 100_000 });
+  await expect(pageEl(page, 1).locator('.rp-recognized span', { hasText: 'agreement' }).first()).toBeAttached();
+  await page.locator('.rp-scroll').focus();
+  await page.keyboard.press('ControlOrMeta+f');
+  await page.getByRole('searchbox', { name: 'Search' }).fill('website');
+  await expect(page.locator('.rp-find-count')).toHaveText(/1 of \d/);
+});

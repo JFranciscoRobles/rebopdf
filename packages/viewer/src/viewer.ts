@@ -637,6 +637,7 @@ export class Viewer {
   /** @internal */
   overlay(view: PageView) {
     this.drawLinks(view);
+    this.drawRecognized(view);
     renderMarks(view.marks, marksOn(this.pdf, view.page.id), view.geo, this.t);
     const signatures = this.pdf.marks.flatMap((m) => (m.kind === 'signature' && m.page === view.page.id ? [m.rect] : []));
     renderFields(view.fields, this.pdf.fields, view.page.id, view.geo, {
@@ -748,6 +749,37 @@ export class Viewer {
     } finally {
       view.drawing = undefined;
     }
+  }
+
+  /** Lays the words recognized in a picture of a page over it, unseen, to be selected as its text is. */
+  private drawRecognized(view: PageView) {
+    const words = this.pdf.recognized?.[view.page.id] ?? [];
+    let layer = view.el.querySelector<HTMLElement>(':scope > .rp-recognized');
+    if (!words.length) {
+      layer?.remove();
+      return;
+    }
+    if (!layer) {
+      layer = this.doc.createElement('div');
+      layer.className = 'rp-layer rp-recognized';
+      view.text.after(layer);
+    }
+    const measure = this.doc.createElement('canvas').getContext('2d');
+    layer.replaceChildren(
+      ...words.map((word) => {
+        const span = this.doc.createElement('span');
+        span.textContent = `${word.text} `;
+        const s = view.geo.toScreenRect(word.rect);
+        const size = s.height * 0.86;
+        let wide = s.width;
+        if (measure) {
+          measure.font = `${size}px sans-serif`;
+          wide = measure.measureText(word.text).width || s.width;
+        }
+        Object.assign(span.style, { left: `${s.x}px`, top: `${s.y}px`, fontSize: `${size}px`, transform: `scaleX(${s.width / wide})` });
+        return span;
+      }),
+    );
   }
 
   /** Lays the links of a page over it: an address of the web opens apart, a place of the PDF is gone to. */

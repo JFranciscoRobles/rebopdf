@@ -66,6 +66,11 @@ export interface EditorOptions {
   files?: boolean;
   /** Told the Pdf after every change. */
   onChange?: (pdf: Pdf) => void;
+  /**
+   * Reads the text of pictures of pages: `recognizeText` of @rebopdf/ocr, to
+   * offer Recognize text in the menu. Without it, the menu has it not.
+   */
+  recognize?: (pdf: Pdf, options: { onProgress?: (done: number, total: number) => void; languages?: string[] }) => Promise<Pdf>;
   /** Given the bytes of the PDF when Save is pressed. Without it, the button downloads the PDF. */
   onSave?: (bytes: Uint8Array, pdf: Pdf) => void | Promise<void>;
 }
@@ -297,6 +302,22 @@ export class Editor {
       else if (checks.some((c) => !c.whole)) this.toast(fill(this.t.signatureHoldsChanged, { names: checks.map(name).join(', ') }));
       else this.toast(fill(this.t.signatureIntact, { names: checks.map(name).join(', ') }));
     });
+  }
+
+  /** Reads the text of the pages that are pictures (scans), to be found, selected and blacked out. */
+  async recognizeText(): Promise<void> {
+    const pdf = this.current;
+    if (!pdf || !this.options.recognize) return;
+    this.toast(this.t.recognizing);
+    const languages = this.options.locale?.startsWith('es') ? ['spa', 'eng'] : ['eng', 'spa'];
+    const read = await this.options.recognize(pdf, { languages, onProgress: (done, total) => this.toast(fill(this.t.recognizingPages, { done, total })) });
+    if (read === pdf) {
+      this.toast(this.t.nothingToRecognize);
+      return;
+    }
+    this.commit(read);
+    const pages = Object.keys(read.recognized ?? {}).length;
+    this.toast(fill(this.t.recognized, { n: pages }));
   }
 
   /** Compares the PDF with another version of it, from a file: what changed, side by side. */
@@ -1344,6 +1365,7 @@ export class Editor {
       item('flatten', t.downloadFlat, t.downloadFlatHint, () => void this.downloadFlat()),
       item('signature', t.signDigitally, t.signDigitallyHint, () => void this.signDigitally()),
       ...(this.options.files !== false ? [item('layers', t.compareWith, t.compareHint, () => void this.compareWith())] : []),
+      ...(this.options.recognize ? [item('text', t.recognize, t.recognizeHint, () => void this.recognizeText())] : []),
     ];
     this.openPop(anchor.getBoundingClientRect(), items);
     this.pop?.classList.add('rp-menu');

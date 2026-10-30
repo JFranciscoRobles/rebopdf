@@ -10,7 +10,8 @@
     "./server": "./src/server.ts"
   },
   "dependencies": {
-    "@rebopdf/core": "*"
+    "@rebopdf/core": "*",
+    "@rebopdf/ocr": "*"
   },
   "scripts": {
     "build": "node scripts/build.mjs"
