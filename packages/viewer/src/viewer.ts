@@ -579,6 +579,7 @@ export class Viewer {
       canvas.setAttribute('aria-hidden', 'true');
       await proxy.render({ canvas, viewport }).promise;
       sheet.replaceChildren(canvas);
+      this.thumbMarks(li, page);
     } catch {
       this.thumbDrawn.delete(page.id);
     }
@@ -632,6 +633,32 @@ export class Viewer {
   /** Lays the marks, the fields and what was found over every page. */
   private overlays() {
     for (const view of this.views.values()) this.overlay(view);
+    for (const page of this.pdf.pages) {
+      const li = this.thumbFor(page.id);
+      if (li) this.thumbMarks(li, page);
+    }
+  }
+
+  /** The marks of a page over its thumbnail, as small as it is: where there is something on it shows at a glance. */
+  private thumbMarks(li: HTMLLIElement, page: Page) {
+    const sheet = li.querySelector<HTMLElement>('.rp-thumb-sheet');
+    if (!sheet) return;
+    let layer = sheet.querySelector<HTMLElement>(':scope > .rp-thumb-marks');
+    const marks = marksOn(this.pdf, page.id);
+    if (!marks.length) {
+      layer?.remove();
+      return;
+    }
+    if (!layer) {
+      layer = this.doc.createElement('div');
+      layer.className = 'rp-layer rp-thumb-marks';
+      layer.setAttribute('aria-hidden', 'true');
+    }
+    sheet.append(layer);
+    renderMarks(layer, marks, geometryOf(page, Number.parseFloat(sheet.style.width) / pageSize(page).width), this.t, true);
+    // A picture of the marks, not the marks: nothing in it is chosen, focused or read out.
+    layer.inert = true;
+    for (const el of layer.querySelectorAll('[data-mark]')) el.removeAttribute('data-mark');
   }
 
   /** @internal */

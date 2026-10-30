@@ -142,7 +142,7 @@ test('a mark is chosen, moved by the arrows, coloured and taken off, and comes b
   await page.getByRole('textbox', { name: 'What the note says' }).fill('Hello there');
   await expect(page.getByRole('button', { name: 'Note: Hello there' })).toBeVisible();
   await page.getByRole('button', { name: 'Delete', exact: true }).click();
-  await expect(page.locator('.rp-mark-note')).toHaveCount(0);
+  await expect(page.locator('.rp-pages .rp-mark-note')).toHaveCount(0);
   await page.keyboard.press('ControlOrMeta+z');
   await expect(page.getByRole('button', { name: 'Note: Hello there' })).toBeVisible();
 });
@@ -274,7 +274,7 @@ test('a note, a text and a signature are put with the keyboard alone', async ({ 
   await page.getByRole('button', { name: 'Place it' }).click();
   await page.locator('.rp-scroll').focus();
   await page.keyboard.press('Enter');
-  await expect(page.locator('.rp-mark-signature')).toHaveCount(1);
+  await expect(page.locator('.rp-pages .rp-mark-signature')).toHaveCount(1);
   expect((await state(page)).marks.map((m) => m.kind)).toEqual(['note', 'text', 'signature']);
 });
 
@@ -370,7 +370,7 @@ test('the notes a PDF comes with are changed and deleted as any other', async ({
   await note.click();
   await page.getByRole('textbox', { name: 'What the note says' }).fill('Seen');
   await page.getByRole('button', { name: 'Delete', exact: true }).click();
-  await expect(page.locator('.rp-mark-note')).toHaveCount(0);
+  await expect(page.locator('.rp-pages .rp-mark-note')).toHaveCount(0);
   const { bytes: saved } = await downloaded(page);
   const reader = await readerOf(saved);
   expect((await (await reader.getPage(1)).getAnnotations()).filter((a) => a.subtype === 'Text')).toHaveLength(0);
@@ -381,10 +381,10 @@ test('a mark is copied, pasted, duplicated, and a signature put on every page', 
   await page.keyboard.press('Enter');
   await page.keyboard.type('AG');
   await page.keyboard.press('ControlOrMeta+Enter');
-  await expect(page.locator('.rp-mark-text')).toHaveCount(1);
+  await expect(page.locator('.rp-pages .rp-mark-text')).toHaveCount(1);
   await page.locator('.rp-scroll').focus();
   await page.keyboard.press('ControlOrMeta+d');
-  await expect(page.locator('.rp-mark-text')).toHaveCount(2);
+  await expect(page.locator('.rp-pages .rp-mark-text')).toHaveCount(2);
   await page.keyboard.press('ControlOrMeta+c');
   await page.getByRole('textbox', { name: 'Page number' }).fill('2');
   await page.getByRole('textbox', { name: 'Page number' }).press('Enter');

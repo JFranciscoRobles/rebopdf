@@ -94,6 +94,8 @@ The first version to go to npm: 0.1.0 never went, and what it has is here.
   or on a window (their pages put in when it has a PDF); native menus in
   Spanish and English; changes not saved asked about before a window
   closes. The editor gives `addFiles` for it.
+- The thumbnails show the marks of their pages: where something is
+  highlighted, noted, signed or blacked out is seen at a glance.
 - The editor takes items of the application's own in its menu (`menu`),
   and says what they did (`notify`).
 - Saved by adding to the file, only what changed is written: the fields

@@ -119,6 +119,8 @@ const CSS = `
 .rp-thumb[aria-current="page"] .rp-thumb-number { color: var(--rp-pressed-text); font-weight: 600; }
 .rp-thumb-sheet { position: relative; background: #fff; box-shadow: var(--rp-page-shadow); overflow: hidden; }
 .rp-thumb-sheet canvas { display: block; width: 100%; height: 100%; }
+.rp-thumb-marks { pointer-events: none; }
+.rp-thumb-marks .rp-mark-note { pointer-events: none; }
 .rp-thumb-number { color: var(--rp-muted); font-size: 12px; }
 
 .rp-scroll { position: relative; flex: 1 1 auto; min-width: 0; overflow: auto; outline: none; touch-action: pan-x pan-y; }

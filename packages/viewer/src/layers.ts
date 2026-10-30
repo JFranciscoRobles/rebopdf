@@ -100,8 +100,8 @@ export function noteIcon(doc: Document, color: string): SVGSVGElement {
   return svg;
 }
 
-/** Draws the marks of a page in its layer, each element with the id of its mark in data-mark. */
-export function renderMarks(layer: HTMLElement, marks: Mark[], geo: Geometry, t: Strings): void {
+/** Draws the marks of a page in its layer, each element with the id of its mark in data-mark; `small`, as a picture of them, notes as big as the page has them. */
+export function renderMarks(layer: HTMLElement, marks: Mark[], geo: Geometry, t: Strings, small = false): void {
   const doc = layer.ownerDocument;
   layer.replaceChildren();
   for (const mark of marks) {
@@ -127,7 +127,7 @@ export function renderMarks(layer: HTMLElement, marks: Mark[], geo: Geometry, t:
         el.append(noteIcon(doc, mark.color));
         placeTurned(el, markBounds(mark), geo);
         // Its icon is drawn as big at any zoom, as readers draw it.
-        const size = Math.max(18, Math.min(28, NOTE_SIZE * geo.scale));
+        const size = small ? NOTE_SIZE * geo.scale : Math.max(18, Math.min(28, NOTE_SIZE * geo.scale));
         const left = Number.parseFloat(el.style.left) + (Number.parseFloat(el.style.width) - size) / 2;
         const top = Number.parseFloat(el.style.top) + (Number.parseFloat(el.style.height) - size) / 2;
         place(el, { x: left, y: top, width: size, height: size });
