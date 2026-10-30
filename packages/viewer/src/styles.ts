@@ -91,11 +91,20 @@ const CSS = `
 .rp-zoom { width: auto; max-width: 140px; }
 
 .rp-body { position: relative; display: flex; flex: 1 1 auto; min-height: 0; }
-.rp-side { display: flex; flex-direction: column; flex: none; width: 184px; background: var(--rp-chrome); border-right: 1px solid var(--rp-border); min-height: 0; }
+
+/* The bar at the foot of the pages: chips that float over them, as Rebodocs has them. */
+.rp-stage { position: relative; display: flex; flex: 1 1 auto; min-width: 0; }
+.rp-statusbar { position: absolute; z-index: 4; left: 12px; right: 12px; bottom: 14px; display: flex; justify-content: center; align-items: center; gap: 6px; pointer-events: none; }
+.rp-chip { display: flex; align-items: center; gap: 2px; min-height: 40px; padding: 3px 6px; border: 1px solid var(--rp-border); border-radius: 999px; background: var(--rp-raised); box-shadow: 0 10px 28px -10px rgba(47, 46, 43, 0.35), 0 1px 3px rgba(47, 46, 43, 0.08); pointer-events: auto; }
+.rp-chip .rp-button { min-width: 32px; height: 32px; border-radius: 999px; }
+.rp-chip .rp-input { height: 30px; border-radius: 999px; }
+.rp-chip.rp-pagebox { padding: 3px 14px 3px 6px; }
+.rp-chip .rp-zoom { max-width: none; border-color: transparent; background: none; }
+.rp-side { display: flex; flex-direction: column; flex: none; width: 248px; background: var(--rp-chrome); border-right: 1px solid var(--rp-border); min-height: 0; }
 .rp-side[hidden] { display: none; }
 .rp-side-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; row-gap: 4px; padding: 10px 12px 4px; color: var(--rp-muted); font-size: 12px; font-weight: 600; }
-.rp-side-tabs { display: flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--rp-hover); }
-.rp-side-tab { height: 26px; padding: 0 10px; border: 0; border-radius: 7px; background: none; color: var(--rp-muted); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.rp-side-tabs { display: flex; flex: 1 1 100%; gap: 2px; padding: 3px; border-radius: 9px; background: var(--rp-hover); }
+.rp-side-tab { flex: 1 1 auto; min-width: 0; height: 28px; padding: 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 0; border-radius: 7px; background: none; color: var(--rp-muted); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
 .rp-side-tab[aria-selected="true"] { background: var(--rp-raised); color: var(--rp-text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12); }
 .rp-outline { flex: 1 1 auto; overflow-y: auto; padding: 6px 8px 16px; }
 .rp-outline ul { list-style: none; margin: 0; padding: 0; }
@@ -132,7 +141,7 @@ const CSS = `
 .rp-thumb-number { color: var(--rp-muted); font-size: 12px; }
 
 .rp-scroll { position: relative; flex: 1 1 auto; min-width: 0; overflow: auto; outline: none; touch-action: pan-x pan-y; }
-.rp-pages { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 24px 16px 48px; min-width: min-content; }
+.rp-pages { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 24px 16px 80px; min-width: min-content; }
 .rp-page { position: relative; flex: none; background: #fff; box-shadow: var(--rp-page-shadow); --scale-round-x: 1px; --scale-round-y: 1px; }
 .rp-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .rp-page-state { position: absolute; inset: 0; display: grid; place-items: center; color: #8a877f; font-size: 13px; }
@@ -211,8 +220,62 @@ select.rp-field { padding: 0 2px; }
   .rp-title, .rp-hide-narrow { display: none; }
   .rp-find { left: 8px; right: 8px; }
   .rp-find .rp-input { flex: 1; width: auto; min-width: 0; }
-  .rp-pages { padding: 12px 8px 32px; }
+  .rp-pages { padding: 12px 8px 72px; }
+  /* Where the tools float, the page in view goes over them. */
+  .rp-root:has(.rp-tools:not(:empty)) .rp-statusbar { bottom: 72px; }
 }
+
+/* The menu: a screen of its own over the viewer, its parts down one side, as Rebodocs has it. */
+.rp-ms { position: absolute; inset: 0; z-index: 30; display: flex; background: var(--rp-chrome); color: var(--rp-text); animation: rp-ms-in .16s ease-out; }
+@keyframes rp-ms-in { from { opacity: 0; transform: scale(1.01); } }
+@media (prefers-reduced-motion: reduce) { .rp-ms { animation: none; } }
+.rp-ms-nav { flex: none; display: flex; flex-direction: column; gap: 2px; width: 260px; padding: 18px 14px; border-right: 1px solid var(--rp-border); overflow-y: auto; }
+.rp-ms-list { display: contents; }
+.rp-ms button { font: inherit; color: inherit; }
+.rp-ms-back { display: flex; align-items: center; gap: 8px; height: 38px; margin-bottom: 14px; padding: 0 10px; border: 0; border-radius: 10px; background: var(--rp-hover); font-weight: 600; cursor: pointer; text-align: left; }
+.rp-ms-back:hover { background: var(--rp-down); }
+.rp-ms-tab { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 12px; border: 0; border-radius: 10px; background: none; text-align: left; cursor: pointer; }
+.rp-ms-tab .rp-icon { color: var(--rp-muted); }
+.rp-ms-tab:hover { background: var(--rp-hover); }
+.rp-ms-tab[aria-selected="true"] { background: var(--rp-raised); color: var(--rp-accent); font-weight: 600; box-shadow: 0 0 0 1px var(--rp-border), 0 1px 3px rgba(47, 46, 43, 0.12); }
+.rp-ms-tab[aria-selected="true"] .rp-icon { color: var(--rp-accent); }
+.rp-ms-doc { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.rp-ms-doc > div { min-width: 0; }
+.rp-ms-doc b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
+.rp-ms-doc small { display: block; margin-top: 2px; color: var(--rp-muted); font-size: 12px; }
+.rp-ms-nav .rp-ms-doc { margin-top: auto; padding: 12px; border: 1px solid var(--rp-border); border-radius: 12px; background: var(--rp-raised); }
+.rp-ms-pane .rp-ms-doc { margin-bottom: 14px; }
+.rp-ms-icon { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 10px; background: var(--rp-pressed); color: var(--rp-pressed-text); }
+.rp-ms-main { position: relative; flex: 1; min-width: 0; overflow-y: auto; padding: 40px clamp(20px, 5vw, 64px); }
+.rp-ms-pane { max-width: 760px; }
+.rp-ms-pane h2 { margin: 0 0 6px; font-size: 28px; font-weight: 800; letter-spacing: -0.02em; }
+.rp-ms-pane > p { margin: 0 0 24px; color: var(--rp-muted); font-size: 14px; }
+.rp-ms-pane h2 + .rp-ms-doc, .rp-ms-pane h2 + .rp-ms-tiles, .rp-ms-pane h2 + .rp-ms-rows { margin-top: 18px; }
+.rp-ms-x { position: absolute; right: 16px; top: 16px; display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 10px; background: none; cursor: pointer; color: var(--rp-muted); }
+.rp-ms-x:hover { background: var(--rp-hover); color: var(--rp-text); }
+.rp-ms-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.rp-ms-tile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 104px; padding: 12px; border: 1px solid var(--rp-border); border-radius: 12px; background: var(--rp-raised); cursor: pointer; }
+.rp-ms-tile .rp-icon { color: var(--rp-accent); }
+.rp-ms-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; }
+.rp-ms-row { display: flex; align-items: center; gap: 14px; padding: 16px; border: 1px solid var(--rp-border); border-radius: 12px; background: var(--rp-raised); text-align: left; cursor: pointer; }
+.rp-ms-row b { display: block; font-size: 14px; }
+.rp-ms-row small { display: block; margin-top: 3px; color: var(--rp-muted); font-size: 12px; line-height: 1.4; }
+.rp-ms-choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.rp-ms-choice { display: flex; align-items: center; gap: 10px; min-width: 160px; height: 44px; padding: 0 14px; border: 1px solid var(--rp-border); border-radius: 12px; background: var(--rp-raised); cursor: pointer; }
+.rp-ms-dot { width: 14px; height: 14px; border: 1.5px solid var(--rp-border-strong); border-radius: 50%; }
+.rp-ms-choice[aria-checked="true"] { border-color: var(--rp-accent); }
+.rp-ms-choice[aria-checked="true"] .rp-ms-dot { border: 4px solid var(--rp-accent); }
+.rp-ms-tile:hover, .rp-ms-row:hover, .rp-ms-choice:hover { border-color: var(--rp-accent); }
+@media (max-width: 640px) { .rp-ms-nav { width: 200px; } }
+@media (max-width: 520px) {
+  .rp-ms { flex-direction: column; }
+  .rp-ms-nav { flex-direction: row; width: auto; padding: 10px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--rp-border); }
+  .rp-ms-back { margin: 0 6px 0 0; }
+  .rp-ms-back, .rp-ms-tab { flex: none; }
+  .rp-ms-nav .rp-ms-doc { display: none; }
+  .rp-ms-main { padding: 24px 16px; }
+}
+
 
 /* The text of a page, laid over it to be selected, as PDF.js lays it. */
 .rp-root .textLayer { position: absolute; text-align: initial; inset: 0; overflow: clip; opacity: 1; line-height: 1; letter-spacing: normal; word-spacing: normal; text-size-adjust: none; -webkit-text-size-adjust: none; forced-color-adjust: none; transform-origin: 0 0; caret-color: CanvasText; z-index: 0; color-scheme: only light;

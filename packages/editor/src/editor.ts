@@ -47,7 +47,7 @@ import {
   pageText,
   type TextMark,
 } from '@rebopdf/core';
-import { fill, type Geometry, type IconName, icon, makeOption, mountComparison, mountViewer, type PageView, pathData, type Viewer, type Zoom } from '@rebopdf/viewer';
+import { fill, type Geometry, type IconName, icon, makeOption, type MenuEntry, type MenuSection, mountComparison, mountViewer, type PageView, pathData, type Viewer, type Zoom } from '@rebopdf/viewer';
 import { type EditorStrings, editorStringsFor } from './i18n';
 import { askCertificate } from './certificate';
 import { askProtection } from './protect';
@@ -64,6 +64,10 @@ export interface EditorOptions {
   pdf?: Pdf;
   /** "en" or "es"; English when left out. */
   locale?: string;
+  /** Whether the menu offers English and Spanish, to change to at once. It does unless false. */
+  languages?: boolean;
+  /** Told the language chosen in the menu, once the editor speaks it. */
+  onLocale?: (locale: 'en' | 'es') => void;
   /** Light or dark; as the system when left out. */
   theme?: 'light' | 'dark';
   /** The name put on the notes and highlights, as their author. */
@@ -139,7 +143,7 @@ const OCR_LANGUAGES: [string, string][] = [
 ];
 
 export class Editor {
-  readonly t: EditorStrings;
+  t: EditorStrings;
   /** The viewer the editor works in; none while there is no PDF. */
   viewer?: Viewer;
   private host: HTMLElement;
@@ -204,7 +208,7 @@ export class Editor {
     } else this.start(pdf);
   }
 
-  private start(pdf: Pdf) {
+  private start(pdf: Pdf, again = false, at?: { page: string; theme?: string; side: boolean }) {
     this.empty?.remove();
     this.empty = undefined;
     this.current = pdf;
@@ -212,8 +216,9 @@ export class Editor {
     const viewer = mountViewer(this.host, {
       pdf,
       locale: this.options.locale,
-      theme: this.options.theme,
-      thumbnails: this.options.thumbnails,
+      theme: (at?.theme as 'light' | 'dark' | undefined) ?? (at ? undefined : this.options.theme),
+      thumbnails: at ? at.side : this.options.thumbnails,
+      ...(at?.page ? { page: at.page } : {}),
       zoom: this.options.zoom,
       download: false,
       fill: true,
@@ -225,6 +230,8 @@ export class Editor {
         for (const listener of this.pageListeners) listener(id);
       },
       onSign: (field, rect) => void this.signField(field, rect),
+      menuSections: () => this.menuSections(),
+      ...(this.options.languages !== false ? { setLocale: (locale: 'en' | 'es') => this.setLocale(locale) } : {}),
       panels: true,
       decorateOutline: (row, path, item) => this.decorateBookmark(row, path, item),
       decorateFile: (row, file) => {
@@ -285,11 +292,9 @@ export class Editor {
     save.setAttribute('aria-label', saveLabel.textContent);
     save.append(icon(this.doc, this.options.onSave ? 'check' : 'download', 16), saveLabel);
     save.addEventListener('click', () => void this.saveOrDownload());
-    const more = this.button('more', t.more, () => this.moreMenu(more));
-    more.setAttribute('aria-haspopup', 'true');
     const end = this.doc.createElement('div');
     end.className = 'rp-sep';
-    viewer.slots.end.append(end, save, more);
+    viewer.slots.end.append(end, save);
 
     // Over the thumbnails: what is done to the pages chosen, or to the page in view.
     viewer.slots.side.append(
@@ -333,7 +338,39 @@ export class Editor {
     });
     if (this.options.files !== false) this.dropping(root, zone);
     this.refresh();
-    this.tellSigned(pdf);
+    if (!again) this.tellSigned(pdf);
+  }
+
+  /**
+   * Speaks another language, at once: the editor is made again in it, with
+   * the PDF, its history, the page in view and its look as they were.
+   */
+  setLocale(locale: 'en' | 'es'): void {
+    this.options = { ...this.options, locale };
+    this.t = editorStringsFor(locale);
+    const viewer = this.viewer;
+    if (viewer && this.current) {
+      const at = { page: viewer.page, theme: viewer.root.dataset.theme, side: !!viewer.root.querySelector('.rp-side:not([hidden])') };
+      this.closePop();
+      clearTimeout(this.toastTimer);
+      for (const run of this.cleanup) run();
+      this.cleanup = [];
+      viewer.destroy();
+      this.viewer = undefined;
+      this.peersEl = undefined;
+      this.buttons = {};
+      this.start(this.current, true, at);
+      if (this.role !== 'edit') this.setRole(this.role);
+      if (this.pagesLocked) this.lockPages(true);
+      if (this.peers.length) this.setPeers(this.peers);
+      // The focus was in what is gone (the menu, as a rule): to where the menu is opened, as it was.
+      if (!this.doc.activeElement || this.doc.activeElement === this.doc.body) (this.viewer as Viewer | undefined)?.menuButton.focus();
+    } else if (this.empty) {
+      this.empty.remove();
+      this.empty = undefined;
+      this.showEmpty();
+    }
+    this.options.onLocale?.(locale);
   }
 
   /** Says a PDF is signed, by whom, and that what is changed is added after the signature. */
@@ -665,6 +702,7 @@ export class Editor {
   private pageListeners = new Set<(page: string) => void>();
   private pagesLocked = false;
   private peersEl?: HTMLElement;
+  private peers: { name: string; color: string; page?: string }[] = [];
 
   private tell(pdf: Pdf, remote: boolean) {
     for (const listener of this.listeners) listener(pdf, remote);
@@ -705,6 +743,7 @@ export class Editor {
 
   /** Shows who else is working on the PDF, and on which page (by id). */
   setPeers(peers: { name: string; color: string; page?: string }[]): void {
+    this.peers = peers;
     if (!this.viewer) return;
     if (!this.peersEl) {
       this.peersEl = this.doc.createElement('div');
@@ -1825,52 +1864,58 @@ export class Editor {
     (wrap.querySelector('[aria-pressed="true"]') as HTMLElement | null)?.focus();
   }
 
-  private moreMenu(anchor: HTMLElement) {
+  /** The parts of the menu: the document, how it is exported, signing it, and the rest. */
+  private menuSections(): MenuSection[] {
     const t = this.t;
-    const item = (name: IconName, text: string, hint: string, run: () => void) => {
-      const b = this.doc.createElement('button');
-      b.type = 'button';
-      b.className = 'rp-button';
-      b.setAttribute('role', 'menuitem');
-      const words = this.doc.createElement('span');
-      words.textContent = text;
-      if (hint) {
-        const small = this.doc.createElement('small');
-        small.textContent = hint;
-        words.append(small);
-      }
-      b.append(icon(this.doc, name, 16), words);
-      b.addEventListener('click', () => {
-        this.closePop();
-        run();
-      });
-      return b;
-    };
-    const items = [
-      ...(this.options.files !== false ? [item('open', t.open, '', () => void this.pick(false)), item('filePlus', t.insert, '', () => void this.pick(true))] : []),
-      item('print', t.print, '', () => void this.viewer?.print()),
-      item('download', t.download, '', () => void this.saveOrDownload()),
-      item('flatten', t.downloadFlat, t.downloadFlatHint, () => void this.downloadFlat()),
-      item('download', t.downloadSmaller, t.downloadSmallerHint, () => void this.downloadSmaller()),
-      item('check', t.downloadPdfA, t.downloadPdfAHint, () => void this.downloadAs({ pdfa: true })),
-      item('lock', t.downloadProtected, t.downloadProtectedHint, () => void this.downloadProtected()),
-      item('signature', t.signDigitally, t.signDigitallyHint, () => void this.signDigitally()),
-      ...(this.options.files !== false ? [item('layers', t.compareWith, t.compareHint, () => void this.compareWith())] : []),
-      ...(this.options.recognize ? [item('text', t.recognize, t.recognizeHint, () => this.askLanguages(anchor.getBoundingClientRect()))] : []),
-      ...(this.history.length ? [item('undo', t.history, fill(t.historyHint, { n: this.history.length }), () => this.showHistory(anchor.getBoundingClientRect()))] : []),
-      ...(this.options.menu ?? []).map((own) => item(own.icon, own.label, own.hint ?? '', own.run)),
+    // What opens a popover of its own is placed by the button of the menu, the menu being closed by then.
+    const by = () => this.viewer!.menuButton.getBoundingClientRect();
+    const files = this.options.files !== false;
+    const tools: MenuEntry[] = [
+      ...(files ? [{ icon: 'layers' as const, label: t.compareWith, hint: t.compareHint, run: () => void this.compareWith() }] : []),
+      ...(this.options.recognize ? [{ icon: 'text' as const, label: t.recognize, hint: t.recognizeHint, run: () => this.askLanguages(by()) }] : []),
+      ...(this.history.length ? [{ icon: 'undo' as const, label: t.history, hint: fill(t.historyHint, { n: this.history.length }), run: () => this.showHistory(by()) }] : []),
+      ...(this.options.menu ?? []).map((own) => ({ icon: own.icon, label: own.label, hint: own.hint, run: own.run })),
     ];
-    this.openPop(anchor.getBoundingClientRect(), items);
-    this.pop?.classList.add('rp-menu');
-    this.pop?.setAttribute('role', 'menu');
-    items[0]?.focus();
-    this.pop?.addEventListener('keydown', (event) => {
-      const at = items.indexOf(this.doc.activeElement as HTMLButtonElement);
-      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        event.preventDefault();
-        items[(at + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus();
-      }
-    });
+    return [
+      {
+        id: 'document',
+        icon: 'file',
+        label: t.menuDocument,
+        look: 'tiles',
+        entries: [
+          ...(files
+            ? [
+                { icon: 'open' as const, label: t.open, run: () => void this.pick(false) },
+                { icon: 'filePlus' as const, label: t.insert, run: () => void this.pick(true) },
+              ]
+            : []),
+          { icon: this.options.onSave ? 'check' : 'download', label: this.options.onSave ? t.save : t.download, run: () => void this.saveOrDownload() },
+          { icon: 'print', label: t.print, run: () => void this.viewer?.print() },
+        ],
+      },
+      {
+        id: 'export',
+        icon: 'download',
+        label: t.menuExport,
+        intro: t.menuExportText,
+        look: 'rows',
+        entries: [
+          { icon: 'flatten', label: t.downloadFlat, hint: t.downloadFlatHint, run: () => void this.downloadFlat() },
+          { icon: 'download', label: t.downloadSmaller, hint: t.downloadSmallerHint, run: () => void this.downloadSmaller() },
+          { icon: 'check', label: t.downloadPdfA, hint: t.downloadPdfAHint, run: () => void this.downloadAs({ pdfa: true }) },
+          { icon: 'lock', label: t.downloadProtected, hint: t.downloadProtectedHint, run: () => void this.downloadProtected() },
+        ],
+      },
+      {
+        id: 'sign',
+        icon: 'signature',
+        label: t.menuSign,
+        intro: t.menuSignText,
+        look: 'rows',
+        entries: [{ icon: 'signature', label: t.signDigitally, hint: t.signDigitallyHint, run: () => void this.signDigitally() }],
+      },
+      ...(tools.length ? [{ id: 'tools', icon: 'tools' as const, label: t.menuTools, look: 'rows' as const, entries: tools }] : []),
+    ];
   }
 
   private async downloadFlat() {

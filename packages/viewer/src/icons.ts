@@ -38,6 +38,15 @@ const PATHS = {
   layers: 'M5 9.5h10.5v10.5H5zM8.5 6.5H19V17M11.5 3.5H22',
   redact: 'M3.5 8.5h17v7h-17zM6.5 12h11',
   more: 'M5.5 12h.01M12 12h.01M18.5 12h.01',
+  menu: 'M4.5 7h15M4.5 12h15M4.5 17h15',
+  language: 'M12 20.5a8.5 8.5 0 1 0 0-17 8.5 8.5 0 0 0 0 17zM3.5 12h17M12 3.5c2.3 2.3 3.5 5.2 3.5 8.5s-1.2 6.2-3.5 8.5c-2.3-2.3-3.5-5.2-3.5-8.5s1.2-6.2 3.5-8.5z',
+  file: 'M13.5 3.5H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9zM13.5 3.5V9H19M9 13h6M9 16.5h4',
+  contrast: 'M12 20.5a8.5 8.5 0 1 0 0-17 8.5 8.5 0 0 0 0 17zM12 3.5v17M12 7.5h3.5M12 11.5h7M12 15.5h5.5',
+  fitWidth: 'M3.5 12h17M7 8.5L3.5 12 7 15.5M17 8.5l3.5 3.5-3.5 3.5M3.5 4.5v15M20.5 4.5v15',
+  fitPage: 'M7 3.5h10v17H7zM10 7.5h4M10 11h4M10 14.5h2.5',
+  fullscreen: 'M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5',
+  exitFullscreen: 'M9 4v5H4M20 9h-5V4M15 20v-5h5M4 15h5v5',
+  tools: 'M14.7 6.3a4 4 0 0 0 5.2 5.2L12 19.4a2.1 2.1 0 1 1-3-3L16.9 8.5a4 4 0 0 0-2.2-2.2zM4 20l3-3',
 } as const;
 
 export type IconName = keyof typeof PATHS;

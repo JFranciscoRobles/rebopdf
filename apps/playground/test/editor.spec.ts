@@ -13,12 +13,23 @@ const state = (page: Page) =>
     };
   });
 
+/** Does what the menu offers by this name, in whichever of its parts it is. */
+async function fromMenu(page: Page, name: string | RegExp) {
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  const menu = page.getByRole('dialog', { name: 'Menu' });
+  const entry = menu.getByRole('tabpanel').getByRole('button', { name, exact: typeof name === 'string' });
+  for (const tab of await menu.getByRole('tab').all()) {
+    await tab.click();
+    if (await entry.isVisible()) return entry.click();
+  }
+  throw new Error(`The menu offers no ${name}`);
+}
+
 /** The PDF the Download button gives, opened by the engine. */
 async function downloaded(page: Page, menu = false) {
   const waiting = page.waitForEvent('download');
   if (menu) {
-    await page.getByRole('button', { name: 'More' }).click();
-    await page.getByRole('menuitem', { name: /Download flattened/ }).click();
+    await fromMenu(page, /Download flattened/);
   } else await page.getByRole('button', { name: 'Download', exact: true }).click();
   const file = await waiting;
   const bytes = new Uint8Array(await (await file.createReadStream()).toArray().then((chunks) => Buffer.concat(chunks)));
@@ -183,15 +194,13 @@ test('pages are turned, moved, deleted and taken out, and the undo brings them b
 
 test('the pages of another PDF are added after the page in view', async ({ page }) => {
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'More' }).click();
-  await page.getByRole('menuitem', { name: 'Add pages from a PDF…' }).click();
+  await fromMenu(page, 'Add pages from a PDF…');
   await (await chooser).setFiles({ name: 'Contrato.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await samplePdfBytes('es')) });
   await expect(page.locator('.rp-thumb')).toHaveCount(4);
   await expect(toast(page)).toHaveText('Added 2 pages from Contrato.pdf');
   await expect(page.getByRole('textbox', { name: 'Page number' })).toBeVisible();
   const chooser2 = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'More' }).click();
-  await page.getByRole('menuitem', { name: 'Add pages from a PDF…' }).click();
+  await fromMenu(page, 'Add pages from a PDF…');
   await (await chooser2).setFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello') });
   await expect(toast(page)).toHaveText('notes.txt is not a PDF that can be opened.');
 });
@@ -242,6 +251,49 @@ for (const scheme of ['light', 'dark'] as const) {
     expect(results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
   });
 }
+
+test('the menu is a screen of its parts: the pages fit from the foot, the appearance is chosen, Escape goes back', async ({ page }) => {
+  await page.getByRole('button', { name: 'Fit page' }).click();
+  await expect(page.getByRole('button', { name: 'Fit page' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('combobox', { name: 'Zoom' })).toHaveValue('fit-page');
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  const menu = page.getByRole('dialog', { name: 'Menu' });
+  await expect(menu.getByRole('tab')).toHaveText(['Document', 'Export', 'Sign', 'Tools', 'Language', 'Appearance']);
+  await expect(menu.getByRole('tab', { name: 'Document' })).toBeFocused();
+  for (const scheme of ['light', 'dark'] as const) {
+    // Still, so that what is measured is not the screen coming in.
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    const results = await new AxeBuilder({ page }).include('.rp-ms').analyze();
+    expect(results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
+  }
+  await page.keyboard.press('ArrowDown');
+  await expect(menu.getByRole('heading', { name: 'Export' })).toBeVisible();
+  await menu.getByRole('tab', { name: 'Appearance' }).click();
+  await menu.getByRole('radio', { name: 'Dark' }).click();
+  await expect(page.locator('.rp-root')).toHaveAttribute('data-theme', 'dark');
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Menu', exact: true })).toBeFocused();
+});
+
+test('the language is changed in the menu, at once, with what was done kept', async ({ page }) => {
+  await page.getByRole('textbox', { name: 'Full name' }).fill('Luis');
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('tab', { name: 'Language' }).click();
+  await page.getByRole('radio', { name: 'Español' }).click();
+  await expect(page.getByRole('button', { name: 'Menú', exact: true })).toBeFocused();
+  await expect(page.getByRole('tab', { name: 'Archivos' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Ajustar al ancho' })).toBeVisible();
+  await expect(page).toHaveURL(/lang=es/);
+  // What was filled stays, and is undone as before.
+  expect((await state(page)).fields['client.name']).toBe('Luis');
+  await page.getByRole('button', { name: 'Deshacer' }).click();
+  await expect.poll(async () => (await state(page)).fields['client.name']).toBe('');
+  await page.getByRole('button', { name: 'Menú', exact: true }).click();
+  await page.getByRole('tab', { name: 'Idioma' }).click();
+  await page.getByRole('radio', { name: 'English' }).click();
+  await expect(page.getByRole('button', { name: 'Menu', exact: true })).toBeVisible();
+});
 
 test('with no PDF, one is asked for and opened', async ({ page }) => {
   await page.goto('/?empty');
@@ -328,8 +380,7 @@ test('a PDF with a password is asked for it, opened, and its pages drawn', async
     void dialog.accept(asked.length === 1 ? 'mal' : 'secreto');
   });
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'More' }).click();
-  await page.getByRole('menuitem', { name: 'Open a PDF…' }).click();
+  await fromMenu(page, 'Open a PDF…');
   await (await chooser).setFiles({ name: 'Cerrado.pdf', mimeType: 'application/pdf', buffer: locked });
   await expect(page.locator('.rp-title')).toHaveText('Cerrado');
   expect(asked).toEqual(['Password for Cerrado.pdf', 'Password for Cerrado.pdf']);
@@ -364,8 +415,7 @@ test('the notes a PDF comes with are changed and deleted as any other', async ({
   pdf = addMark(pdf, { kind: 'note', page: pdf.pages[0].id, at: { x: 450, y: 760 }, text: 'From Acrobat', color: '#f08c00', author: 'Luis' });
   const bytes = Buffer.from(await savePdf(pdf));
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'More' }).click();
-  await page.getByRole('menuitem', { name: 'Open a PDF…' }).click();
+  await fromMenu(page, 'Open a PDF…');
   await (await chooser).setFiles({ name: 'Annotated.pdf', mimeType: 'application/pdf', buffer: bytes });
   const note = page.getByRole('button', { name: 'Note: From Acrobat' });
   await expect(note).toBeVisible();
@@ -458,10 +508,12 @@ test('a signed PDF is saved after its signature, its bytes as they came', async 
   doc.getForm().acroForm.addField(widget);
   const original = Buffer.from(await doc.save({ useObjectStreams: false }));
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'More' }).click();
-  await page.getByRole('menuitem', { name: 'Open a PDF…' }).click();
+  await fromMenu(page, 'Open a PDF…');
   await (await chooser).setFiles({ name: 'Signed.pdf', mimeType: 'application/pdf', buffer: original });
-  await expect(toast(page)).toHaveText('Signed by Ana García. What you change is added after the signature, which still holds.');
+  // Who signed it is said, and then, once checked, that this signature (not a real one) does not hold: the check may say it first.
+  await expect(toast(page)).toHaveText(
+    /^(Signed by Ana García\. What you change is added after the signature, which still holds\.|The signature of Ana García does not hold: the file was changed after it\.)$/,
+  );
   await page.getByRole('textbox', { name: 'Full name' }).fill('Luis');
   const { bytes, pdf } = await downloaded(page);
   expect(Buffer.from(bytes.subarray(0, original.length)).equals(original)).toBe(true);
@@ -521,8 +573,7 @@ test('the fields a PDF with no form asks for are found and made at once', async 
   p.drawText('Name: ____________________', { x: 60, y: 760, size: 12, font });
   p.drawText('Phone: ______________', { x: 60, y: 730, size: 12, font });
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'More' }).click();
-  await page.getByRole('menuitem', { name: 'Open a PDF…' }).click();
+  await fromMenu(page, 'Open a PDF…');
   await (await chooser).setFiles({ name: 'Letter.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await doc.save()) });
   await expect(page.locator('.rp-title')).toHaveText('Letter');
   await page.locator('.rp-scroll').focus();
@@ -559,8 +610,7 @@ test('a PDF is signed digitally with a certificate, in its signature field, and 
   await page.mouse.click(b.x + 80, b.y + 560);
   await page.keyboard.press('Escape');
   await page.keyboard.press('v');
-  await page.getByRole('button', { name: 'More' }).click();
-  await page.getByRole('menuitem', { name: /Sign digitally/ }).click();
+  await fromMenu(page, /Sign digitally/);
   await page.getByLabel('Files of the certificate').setInputFiles({ name: 'luis.p12', mimeType: 'application/x-pkcs12', buffer: p12 });
   await page.getByLabel('Its password').fill('clave');
   await page.getByLabel('Why it is signed').fill('Witness');
@@ -581,8 +631,7 @@ test('a PDF is compared with another version of it, side by side', async ({ page
   const font = await older.embedFont(StandardFonts.Helvetica);
   older.getPage(1).drawText('Draft', { x: 64, y: 790, size: 12, font });
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'More' }).click();
-  await page.getByRole('menuitem', { name: /Compare with another version/ }).click();
+  await fromMenu(page, /Compare with another version/);
   await (await chooser).setFiles({ name: 'Draft.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await older.save()) });
   const comparison = page.getByRole('region', { name: 'Comparison' });
   await expect(comparison).toBeVisible();
@@ -610,12 +659,10 @@ test('the text of a scanned page is recognized, found and selected', async ({ pa
   const doc = await PDFDocument.create();
   doc.addPage([595.28, 841.89]).drawImage(await doc.embedPng(await png(canvas)), { x: 0, y: 0, width: 595.28, height: 841.89 });
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'More' }).click();
-  await page.getByRole('menuitem', { name: 'Open a PDF…' }).click();
+  await fromMenu(page, 'Open a PDF…');
   await (await chooser).setFiles({ name: 'Scan.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await doc.save()) });
   await expect(page.locator('.rp-title')).toHaveText('Scan');
-  await page.getByRole('button', { name: 'More' }).click();
-  await page.getByRole('menuitem', { name: /Recognize text/ }).click();
+  await fromMenu(page, /Recognize text/);
   // The languages of the pages: English alone.
   const languages = page.getByRole('group', { name: 'The languages of the pages' });
   await languages.getByRole('checkbox', { name: 'Español' }).uncheck();
@@ -638,8 +685,7 @@ test('two people work on a PDF at once: what one does, the other sees', async ({
     const ana = await browser.newPage();
     await ana.goto(`/?collab=${encodeURIComponent(collab)}&name=Ana`);
     await expect(pageEl(ana, 1).locator('canvas')).toHaveCount(1);
-    await ana.getByRole('button', { name: 'More' }).click();
-    await ana.getByRole('menuitem', { name: /Work on it with others/ }).click();
+    await fromMenu(ana, /Work on it with others/);
     await expect(toast(ana)).toHaveText(/Link copied/);
     const link = await ana.evaluate(() => (window as unknown as { link: string }).link);
     // Pages are the same for everyone in a room: they are not turned or deleted.
@@ -671,8 +717,7 @@ test('two people work on a PDF at once: what one does, the other sees', async ({
 });
 
 test('a PDF is downloaded with a password, and opens with it alone', async ({ page }) => {
-  await page.getByRole('button', { name: 'More' }).click();
-  await page.getByRole('menuitem', { name: /Download with a password/ }).click();
+  await fromMenu(page, /Download with a password/);
   const dialog = page.getByRole('dialog', { name: 'Download with a password' });
   await dialog.getByLabel('Password', { exact: true }).fill('abre');
   await dialog.getByLabel('The password again').fill('otra');
@@ -703,13 +748,11 @@ test('a PDF with a photograph far bigger than its page is downloaded smaller', a
   doc.addPage([595, 842]).drawImage(await doc.embedJpg(photo.toBuffer('image/jpeg', 95)), { x: 40, y: 450, width: 515, height: 343 });
   const heavy = await doc.save();
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'More' }).click();
-  await page.getByRole('menuitem', { name: 'Open a PDF…' }).click();
+  await fromMenu(page, 'Open a PDF…');
   await (await chooser).setFiles({ name: 'Foto.pdf', mimeType: 'application/pdf', buffer: Buffer.from(heavy) });
   await expect(page.locator('.rp-title')).toHaveText('Foto');
   const waiting = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'More' }).click();
-  await page.getByRole('menuitem', { name: /Download smaller/ }).click();
+  await fromMenu(page, /Download smaller/);
   const bytes = new Uint8Array(Buffer.concat(await (await (await waiting).createReadStream()).toArray()));
   expect(bytes.length).toBeLessThan(heavy.length / 3);
   await expect(toast(page)).toHaveText(/^From .+ to .+\.$/);
@@ -719,8 +762,7 @@ test('a PDF with a photograph far bigger than its page is downloaded smaller', a
 test('a PDF is downloaded as PDF/A, every font carried in it', async ({ page }) => {
   await page.getByRole('textbox', { name: 'Full name' }).fill('Ana García');
   const waiting = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'More' }).click();
-  await page.getByRole('menuitem', { name: /Download as PDF\/A/ }).click();
+  await fromMenu(page, /Download as PDF\/A/);
   const bytes = new Uint8Array(Buffer.concat(await (await (await waiting).createReadStream()).toArray()));
   const { PDFDocument, PDFDict, PDFName } = await import('@cantoo/pdf-lib');
   const doc = await PDFDocument.load(bytes);
@@ -799,8 +841,7 @@ test('who comments in a room notes and replies alone, and the history says who d
     const ana = await browser.newPage();
     await ana.goto(`/?collab=${encodeURIComponent(collab)}&name=Ana`);
     await expect(pageEl(ana, 1).locator('canvas')).toHaveCount(1);
-    await ana.getByRole('button', { name: 'More' }).click();
-    await ana.getByRole('menuitem', { name: /Work on it with others/ }).click();
+    await fromMenu(ana, /Work on it with others/);
     await expect(toast(ana)).toHaveText(/Link copied/);
     const links = await ana.evaluate(() => (window as unknown as { links: Record<string, string> }).links);
 
@@ -831,8 +872,7 @@ test('who comments in a room notes and replies alone, and the history says who d
 
     // Who did what.
     await ana.keyboard.press('Escape');
-    await ana.getByRole('button', { name: 'More' }).click();
-    await ana.getByRole('menuitem', { name: /History of the room/ }).click();
+    await fromMenu(ana, /History of the room/);
     const history = ana.getByRole('list', { name: 'History of the room' });
     await expect(history).toContainText('Eva put or changed a note on page 1');
     await expect(history).toContainText('Ana put or changed a note on page 1');

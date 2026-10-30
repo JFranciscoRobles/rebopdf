@@ -48,6 +48,21 @@ const en = {
   signature: 'Signature',
   signHere: 'Sign here',
   redaction: 'To be blacked out',
+  menu: 'Menu',
+  backToDocument: 'Back to the document',
+  document: 'Document',
+  onePage: '1 page',
+  manyPages: '{n} pages',
+  appearance: 'Appearance',
+  appearanceText: 'How the viewer looks: as the system is, or always light or dark. The pages stay as the PDF draws them.',
+  themeSystem: 'As the system',
+  themeLight: 'Light',
+  themeDark: 'Dark',
+  view: 'View',
+  fullScreen: 'Full screen',
+  leaveFullScreen: 'Leave full screen',
+  language: 'Language',
+  languageText: 'The language the viewer speaks in. The PDF stays as it is.',
 };
 
 export type Strings = typeof en;
@@ -100,6 +115,21 @@ const es: Strings = {
   signature: 'Firma',
   signHere: 'Firmar aquí',
   redaction: 'Por tachar',
+  menu: 'Menú',
+  backToDocument: 'Volver al documento',
+  document: 'Documento',
+  onePage: '1 página',
+  manyPages: '{n} páginas',
+  appearance: 'Apariencia',
+  appearanceText: 'Cómo se ve el visor: como el sistema, o siempre claro u oscuro. Las páginas quedan como el PDF las dibuja.',
+  themeSystem: 'Como el sistema',
+  themeLight: 'Claro',
+  themeDark: 'Oscuro',
+  view: 'Vista',
+  fullScreen: 'Pantalla completa',
+  leaveFullScreen: 'Salir de pantalla completa',
+  language: 'Idioma',
+  languageText: 'El idioma en que habla el visor. El PDF queda como está.',
 };
 
 export const STRINGS = { en, es };

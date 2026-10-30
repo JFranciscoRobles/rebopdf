@@ -30,6 +30,7 @@ import {
 import { fill, type Strings, stringsFor } from './i18n';
 import { type IconName, icon } from './icons';
 import { type Geometry, geometryOf, makeOption, renderFields, renderMarks } from './layers';
+import { createMenuScreen, type MenuScreen, type MenuSection, type Theme } from './menu';
 import { injectViewerStyles } from './styles';
 
 /** How big the pages are: 1 is as big as they are printed; or as wide as the view, as all the page, or as wide as the view up to 125%. */
@@ -43,6 +44,8 @@ export interface ViewerOptions {
   theme?: 'light' | 'dark';
   /** The bar over the pages. Shown unless false. */
   toolbar?: boolean;
+  /** The bar at the foot of the pages: the page in view, how the pages fit, the zoom. Shown unless false, or unless the toolbar is not. */
+  statusBar?: boolean;
   /** The thumbnails at the side, open at first. Open when there is room, when left out. */
   thumbnails?: boolean;
   zoom?: Zoom;
@@ -72,6 +75,10 @@ export interface ViewerOptions {
   decorateOutline?: (row: HTMLElement, path: number[], item: OutlineItem) => void;
   /** @internal What the editor adds to each file the PDF carries. */
   decorateFile?: (row: HTMLElement, file: Attachment) => void;
+  /** @internal The parts of the menu before its appearance: the editor's own, in place of the viewer's. */
+  menuSections?: () => MenuSection[];
+  /** Given, the menu offers English and Spanish: what puts the viewer in the one chosen (mounted again with that `locale`). The editor gives its own. */
+  setLocale?: (locale: 'en' | 'es') => void;
 }
 
 type Panel = 'pages' | 'contents' | 'files';
@@ -135,9 +142,15 @@ export class Viewer {
   /** The files the outline was read from, in their order. */
   private outlineSources = '';
   private sideButton?: HTMLButtonElement;
+  /** @internal The button that opens the menu: what the editor places what it opens from the menu by. */
+  readonly menuButton: HTMLButtonElement;
+  private menu: MenuScreen;
+  private fitButtons: { zoom: Zoom; button: HTMLButtonElement }[] = [];
+  private fullButton?: HTMLButtonElement;
   private titleEl: HTMLElement;
   private pageInput: HTMLInputElement;
   private pageCount: HTMLElement;
+  private status: HTMLElement;
   private zoomSelect: HTMLSelectElement;
   private find: HTMLElement;
   private findInput: HTMLInputElement;
@@ -193,8 +206,10 @@ export class Viewer {
     };
     this.sideButton = this.button('sidebar', t.showPages, () => this.toggleThumbnails());
     this.sideButton.setAttribute('aria-expanded', 'false');
+    this.menuButton = this.button('menu', t.menu, () => this.openMenu());
+    this.menuButton.setAttribute('aria-haspopup', 'dialog');
     this.titleEl = make('div', 'rp-title');
-    const pagebox = make('div', 'rp-pagebox rp-group');
+    const pagebox = make('div', 'rp-pagebox rp-chip');
     this.pageInput = make('input', 'rp-input');
     this.pageInput.inputMode = 'numeric';
     this.pageInput.setAttribute('aria-label', t.pageNumber);
@@ -214,37 +229,53 @@ export class Viewer {
       const value = this.zoomSelect.value;
       this.setZoom(Number.isNaN(Number(value)) ? (value as Zoom) : Number(value));
     });
-    const zoomGroup = make('div', 'rp-group rp-hide-narrow');
+    const zoomGroup = make('div', 'rp-chip rp-hide-narrow');
     zoomGroup.append(
       this.button('minus', t.zoomOut, () => this.step(-1)),
       this.zoomSelect,
       this.button('plus', t.zoomIn, () => this.step(1)),
     );
+    // How the pages fit: as wide as the view, or each whole in it.
+    const fits = make('div', 'rp-chip rp-hide-narrow');
+    for (const [zoom, name, label] of [
+      ['fit-width', 'fitWidth', t.fitWidth],
+      ['fit-page', 'fitPage', t.fitPage],
+    ] as const) {
+      const b = this.button(name, label, () => this.setZoom(this.zoom === zoom ? 'auto' : zoom));
+      b.setAttribute('aria-pressed', 'false');
+      this.fitButtons.push({ zoom, button: b });
+      fits.append(b);
+    }
     const searchButton = this.button('search', t.search, () => this.openSearch());
     const right = make('div', 'rp-group');
-    right.append(searchButton);
-    if (options.print !== false) {
-      const print = this.button('print', t.print, () => void this.print());
-      print.classList.add('rp-hide-narrow', 'rp-hide-medium');
-      right.append(print);
-    }
+    right.append(searchButton, this.sideButton);
     if (options.download !== false) right.append(this.button('download', t.download, () => void this.download()));
     const start = make('div', 'rp-group');
-    start.append(this.sideButton, this.titleEl);
-    bar.append(
-      start,
-      this.slots.start,
-      make('div', 'rp-spacer'),
-      this.slots.tools,
-      make('div', 'rp-spacer'),
-      pagebox,
-      make('div', 'rp-sep rp-hide-narrow'),
-      zoomGroup,
-      make('div', 'rp-sep rp-hide-narrow'),
-      right,
-      this.slots.end,
-    );
+    start.append(this.menuButton, this.titleEl);
+    bar.append(start, this.slots.start, make('div', 'rp-spacer'), this.slots.tools, make('div', 'rp-spacer'), right, this.slots.end);
     if (options.toolbar === false) bar.hidden = true;
+
+    // The bar at the foot of the pages, in chips that float over them, as Rebodocs has it.
+    this.status = make('div', 'rp-statusbar');
+    this.status.setAttribute('role', 'toolbar');
+    this.status.setAttribute('aria-label', t.view);
+    this.status.append(pagebox, fits, zoomGroup);
+    if (this.doc.fullscreenEnabled) {
+      const full = make('div', 'rp-chip rp-hide-narrow');
+      this.fullButton = this.button('fullscreen', t.fullScreen, () => void this.toggleFullScreen());
+      full.append(this.fullButton);
+      this.status.append(full);
+      const onFull = () => {
+        const on = this.doc.fullscreenElement === this.root;
+        const label = on ? t.leaveFullScreen : t.fullScreen;
+        this.fullButton?.replaceChildren(icon(this.doc, on ? 'exitFullscreen' : 'fullscreen'));
+        this.fullButton?.setAttribute('aria-label', label);
+        if (this.fullButton) this.fullButton.title = label;
+      };
+      this.doc.addEventListener('fullscreenchange', onFull);
+      this.cleanup.push(() => this.doc.removeEventListener('fullscreenchange', onFull));
+    }
+    if (options.statusBar === false || (options.toolbar === false && options.statusBar !== true)) this.status.hidden = true;
 
     // The thumbnails.
     const body = make('div', 'rp-body');
@@ -332,9 +363,23 @@ export class Viewer {
       this.button('close', t.close, () => this.closeSearch()),
     );
 
-    body.append(this.side, this.scroll, this.find);
+    const stage = make('div', 'rp-stage');
+    stage.append(this.scroll, this.status);
+    body.append(this.side, stage, this.find);
     this.root.append(bar, body);
     host.append(this.root);
+    this.menu = createMenuScreen({
+      root: this.root,
+      t,
+      name: () => this.pdf.name.replace(/\.pdf$/i, ''),
+      pages: () => this.pdf.pages.length,
+      sections: () => this.options.menuSections?.() ?? this.menuSections(),
+      theme: () => this.root.dataset.theme as Theme,
+      setTheme: (theme) => this.setTheme(theme ?? 'system'),
+      setLocale: options.setLocale,
+      focus: () => this.menuButton.focus(),
+    });
+    this.cleanup.push(() => this.menu.destroy());
 
     this.observer = new IntersectionObserver((entries) => this.seen(entries), { root: this.scroll, rootMargin: '900px 0px' });
     this.thumbObserver = new IntersectionObserver((entries) => this.thumbsSeen(entries), { root: this.thumbs, rootMargin: '300px 0px' });
@@ -397,6 +442,37 @@ export class Viewer {
     this.scroll.addEventListener('touchend', (event) => {
       if (event.touches.length < 2) start = 0;
     });
+  }
+
+  /** Opens the menu of the PDF, over the viewer. */
+  openMenu(): void {
+    this.menu.open();
+  }
+
+  /** The viewer's own parts of the menu: the document, downloaded or printed. */
+  private menuSections(): MenuSection[] {
+    const t = this.t;
+    return [
+      {
+        id: 'document',
+        icon: 'file',
+        label: t.document,
+        look: 'tiles',
+        entries: [
+          ...(this.options.download !== false ? [{ icon: 'download' as const, label: t.download, run: () => void this.download() }] : []),
+          ...(this.options.print !== false ? [{ icon: 'print' as const, label: t.print, run: () => void this.print() }] : []),
+        ],
+      },
+    ];
+  }
+
+  private async toggleFullScreen() {
+    try {
+      if (this.doc.fullscreenElement === this.root) await this.doc.exitFullscreen();
+      else await this.root.requestFullscreen();
+    } catch {
+      // Refused by the page it is in: nothing changes.
+    }
   }
 
   private button(name: IconName, label: string, run: () => void): HTMLButtonElement {
@@ -570,7 +646,7 @@ export class Viewer {
       }
       const { width, height } = pageSize(page);
       const sheet = li.querySelector<HTMLElement>('.rp-thumb-sheet')!;
-      const across = 132;
+      const across = 168;
       sheet.style.width = `${width >= height ? across : (across * width) / height}px`;
       sheet.style.height = `${width >= height ? (across * height) / width : across}px`;
       li.querySelector('.rp-thumb-number')!.textContent = String(i + 1);
@@ -647,6 +723,7 @@ export class Viewer {
       this.zoomSelect.append(custom);
     }
     this.zoomSelect.value = value;
+    for (const { zoom, button } of this.fitButtons) button.setAttribute('aria-pressed', String(this.zoom === zoom));
     this.overlays();
     if (anchor) this.goTo(anchor.id, { y: anchor.fraction * (this.views.get(anchor.id)?.geo.height ?? 0) });
     this.queue = this.pdf.pages.map((p) => p.id).filter((id) => this.near.has(id));

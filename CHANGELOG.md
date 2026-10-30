@@ -164,6 +164,18 @@ The first version to go to npm: 0.1.0 never went, and what it has is here.
 - Recognizing text reads again, each on its own, the strips of a page with
   ink and no word read: a big title the layout of the whole page leaves
   out, as under a dark band, is read.
+- **The menu and the bar at the foot, as Rebodocs has them**: the first
+  button of the bar opens the menu, a screen of its own with its parts
+  down one side (Document, Export, Sign, Tools, Appearance), in place of
+  the More menu. The page in view, how the pages fit, the zoom and full
+  screen are chips that float at the foot of the pages (`statusBar` of the
+  viewer, shown unless false); the bar over them keeps the title, the
+  tools, search, the pages and Download. The appearance (as the system,
+  light or dark) is chosen in the menu, and so is the language: the
+  editor speaks English or Spanish at once (`setLocale`, `onLocale`,
+  `languages: false` to leave it out), the PDF, its history and the page
+  in view kept; the viewer alone, when given `setLocale`. The panel of
+  the pages, the contents and the files is wider, its thumbnails bigger.
 
 ### Fixed
 
