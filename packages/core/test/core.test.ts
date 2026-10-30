@@ -220,6 +220,21 @@ describe('marks', () => {
     expect(() => addMark(pdf, { kind: 'note', page: 'nowhere', at: { x: 0, y: 0 }, text: '', color: '#000000' })).toThrow(PdfError);
   });
 
+  it('are written in a font given, for the letters Helvetica has not', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const font = new Uint8Array(await readFile(new URL('../../../node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf', import.meta.url)));
+    let pdf = await samplePdf('en');
+    pdf = addMark(pdf, { kind: 'text', page: pdf.pages[0].id, rect: { x: 64, y: 100, width: 300, height: 20 }, text: 'Привет, Αθήνα', size: 10, color: '#000000' });
+    const plain = await savePdf(pdf);
+    const own = await savePdf(pdf, { font });
+    const helvetica = await openPdf(plain);
+    expect((await pageText(helvetica, helvetica.pages[0].id)).text).not.toContain('Привет');
+    const back = await openPdf(own);
+    expect((await pageText(back, back.pages[0].id)).text).toContain('Привет, Αθήνα');
+    // The letters used alone go in: far less than the font.
+    expect(own.length - plain.length).toBeLessThan(font.length / 4);
+  });
+
   it('keep only the letters the font has', async () => {
     let pdf = await samplePdf('en');
     pdf = addMark(pdf, { kind: 'text', page: pdf.pages[0].id, rect: { x: 64, y: 100, width: 300, height: 20 }, text: 'Done ✅ — ok', size: 10, color: '#000000' });

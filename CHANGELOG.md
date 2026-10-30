@@ -50,5 +50,26 @@ minor version (0.x.0) may change the API; such changes are listed under
   with `--root`, and writing a copy unless it is told the file.
 - **The playground**, on port 5300: the sample agreement in the editor,
   `?viewer`, `?empty`, `?lang=es`.
+- **Tried on PDFs of the world**: the forms of the IRS (1040: 199 fields,
+  and an XFA form beside them, taken out so that what is filled is what
+  every reader shows), a paper of fifteen pages, a scanned one, and one of
+  300 pages and 37 MB, which opens in about a second, draws any page in less
+  than one, finds a word in all of them in a second and a half, and is
+  saved in two and a half: pdf-lib reads and writes fifteen hundred objects
+  at a time, and a PDF of more than four thousand is written without its
+  objects packed in streams, which pdf-lib packs in a time that grows with
+  the square of their number.
+- **Fields called what the PDF calls them** (their tooltip, `/TU`), for
+  screen readers, the hint over them and the MCP server.
+- **Text in any script** with a font given (`font`, of `savePdf`, the
+  viewer, the editor, and `--font` of the MCP server), put in the PDF with
+  the letters used alone, by `@cantoo/fontkit`.
+- **Blank pages** (`insertBlankPage`, and a button over the thumbnails), as
+  big as the page before them.
+- **Printing**, the PDF as it is now.
+- **Marks put with the keyboard**: with a note, a text or the signature as
+  the tool, Enter puts it in the middle of the view.
+- **On a phone**: the tools float at the foot of the pages, the bar fits the
+  screen, two fingers zoom, and the thumbnails go once a page is chosen.
 - **The packages ready for npm**: each built to a `dist/` of its own by
   `tools/package.mjs`, and `npm run release` publishes them in order.

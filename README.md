@@ -56,7 +56,11 @@ await writeFile('filled.pdf', await savePdf(pdf)); // or { flatten: true }
 - **Search:** without minding capitals or accents ("accion" finds "Acción"), across the end of a line, every place shown, the next and the one before with Enter and Shift+Enter.
 - **Forms:** text, checkboxes, radio buttons, choices and lists, filled in the page and saved as a form.
 - **Marks:** highlights of the text selected (with a comment), notes, drawing by hand, text written on the page (to fill a form with no fields), and signatures, drawn, typed or a picture. Each chosen to move by dragging or by the arrows, to colour, to change and to delete.
-- **Pages:** turned, deleted, moved by dragging their thumbnails or by Alt and the arrows, taken out as a PDF of their own, and the pages of other PDFs put in by dropping them on the editor.
+- **Pages:** turned, deleted, moved by dragging their thumbnails or by Alt and the arrows, taken out as a PDF of their own, blank ones put in, and the pages of other PDFs put in by dropping them on the editor.
+- **Any script:** text is written in Helvetica, with Latin letters; given a font (`font: bytesOfATtf`), in any script it has letters for, the letters used alone put in the PDF.
+- **Big PDFs:** 300 pages and 37 MB open in about a second and are saved in two and a half; the pages are drawn as they come near the view.
+- **A phone:** the tools at the foot of the pages, two fingers to zoom.
+- **The keyboard:** every tool by a key, Enter to put a note, a text or a signature in the middle of the view, the thumbnails moved by Alt and the arrows.
 - **One history:** ⌘Z and ⇧⌘Z through every change, fields typed in included.
 - **Saving:** a PDF any reader opens, or flattened, with the fields and the marks drawn into the pages for good.
 
@@ -89,7 +93,7 @@ usePdfAssets('/pdfjs/');
 ## Assistants (MCP)
 
 ```sh
-claude mcp add rebopdf -- npx -y @rebopdf/mcp --root ~/Documents
+claude mcp add rebopdf -- npx -y @rebopdf/mcp --root ~/Documents [--font ~/Fonts/NotoSans.ttf]
 ```
 
 The assistant opens a PDF (`open_pdf`), reads it page by page (`read_pdf`),

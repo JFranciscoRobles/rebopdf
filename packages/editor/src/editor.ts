@@ -23,6 +23,7 @@ import {
   removeMark,
   removePages,
   rotatePages,
+  type SaveOptions,
   savePdf,
   updateMark,
 } from '@rebopdf/core';
@@ -42,6 +43,8 @@ export interface EditorOptions {
   theme?: 'light' | 'dark';
   /** The name put on the notes and highlights, as their author. */
   author?: string;
+  /** A TrueType or OpenType font to write text in, for letters the standard font of PDFs has not (Greek, Cyrillic, Chinese…). */
+  font?: Uint8Array;
   thumbnails?: boolean;
   zoom?: Zoom;
   /** Whether PDFs can be opened and added from files (a button, and dropped). They can unless false. */
@@ -147,6 +150,7 @@ export class Editor {
       zoom: this.options.zoom,
       download: false,
       fill: true,
+      font: this.options.font,
       onChange: (next) => this.commit(next, 'fields', false),
       decorateThumb: (li, page) => this.decorateThumb(li, page),
     });
@@ -899,7 +903,7 @@ export class Editor {
 
   private async downloadFlat() {
     if (!this.current) return;
-    const bytes = await savePdf(this.current, { flatten: true });
+    const bytes = await savePdf(this.current, { flatten: true, font: this.options.font });
     this.give(bytes, this.current.name);
   }
 
@@ -913,15 +917,15 @@ export class Editor {
   }
 
   /** The bytes of the PDF as it is now. */
-  async save(options?: { flatten?: boolean }): Promise<Uint8Array> {
+  async save(options?: SaveOptions): Promise<Uint8Array> {
     if (!this.current) throw new PdfError('empty', 'There is no PDF.');
-    return savePdf(this.current, options);
+    return savePdf(this.current, { font: this.options.font, ...options });
   }
 
   private async saveOrDownload() {
     if (!this.current) return;
     if (!this.options.onSave) return this.viewer?.download();
-    await this.options.onSave(await savePdf(this.current), this.current);
+    await this.options.onSave(await savePdf(this.current, { font: this.options.font }), this.current);
     this.toast(this.t.saved);
   }
 
@@ -962,7 +966,7 @@ export class Editor {
     const ids = this.targetPages();
     if (!ids.length || !this.current) return;
     const part = extractPages(this.current, ids);
-    this.give(await savePdf(part), part.name);
+    this.give(await savePdf(part, { font: this.options.font }), part.name);
   }
 
   /** Makes a thumbnail one that is chosen by a click (with Shift or ⌘ for more), moved by dragging or by Alt and the arrows. */

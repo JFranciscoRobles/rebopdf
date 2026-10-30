@@ -48,6 +48,14 @@ import type { Color, Field, HighlightMark, InkMark, Mark, NoteMark, Pdf, Point, 
 export interface SaveOptions {
   /** Draws fields and marks into the pages, so that they cannot be changed after. */
   flatten?: boolean;
+  /**
+   * A TrueType or OpenType font to write text marks in, put in the PDF with
+   * the letters they use alone: for letters the standard font of PDFs has
+   * not (Greek, Cyrillic, Chinese…). Without it, text is written in Helvetica,
+   * and what it has no letter for is left out. Words are not shaped, so
+   * Arabic and the scripts of India are not written as they should be.
+   */
+  font?: Uint8Array;
 }
 
 /** How many objects a PDF has at most to be written with them packed in streams. */
@@ -89,7 +97,7 @@ export async function savePdf(pdf: Pdf, options: SaveOptions = {}): Promise<Uint
   setPages(doc, order);
 
   let font: PDFFont | undefined;
-  const helvetica = async () => (font ??= await doc.embedFont(StandardFonts.Helvetica));
+  const helvetica = async () => (font ??= await textFont(doc, options.font));
   for (const [i, page] of pdf.pages.entries()) {
     const out = order[i];
     out.setRotation(degrees(page.rotation));
@@ -327,6 +335,13 @@ async function putMark(doc: PDFDocument, page: PDFPage, mark: Mark, flatten: boo
   }
   const annot = doc.context.obj(dict as never);
   page.node.addAnnot(doc.context.register(annot));
+}
+
+/** The font text marks are written in: the one given, with the letters used alone, or Helvetica. */
+async function textFont(doc: PDFDocument, bytes?: Uint8Array): Promise<PDFFont> {
+  if (!bytes) return doc.embedFont(StandardFonts.Helvetica);
+  doc.registerFontkit((await import('@cantoo/fontkit')).default);
+  return doc.embedFont(bytes, { subset: true });
 }
 
 /** The text as the font can write it: what it has no glyph for is left out. */

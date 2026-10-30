@@ -14,6 +14,8 @@ export interface ServerOptions {
   roots?: string[];
   /** Where relative paths start. */
   cwd?: string;
+  /** A TrueType or OpenType font file to write text in, for letters the standard font of PDFs has not. */
+  font?: string;
 }
 
 interface Message {
@@ -162,6 +164,8 @@ export function createPdfServer(options: ServerOptions = {}) {
       throw new ToolError(error instanceof PdfError ? `${basename(full)}: ${error.message}` : String(error));
     }
   };
+  let font: Promise<Uint8Array> | undefined;
+  const fontBytes = () => (options.font ? (font ??= readFile(resolve(cwd, options.font)).then((bytes) => new Uint8Array(bytes))) : undefined);
   const change = (doc: Open, pdf: Pdf) => {
     doc.history.push(doc.pdf);
     if (doc.history.length > HISTORY) doc.history.shift();
@@ -181,7 +185,7 @@ export function createPdfServer(options: ServerOptions = {}) {
       case 'save_pdf': {
         const doc = document(args.document);
         const target = args.file ? allowed(String(args.file)) : doc.file.replace(/(\.pdf)?$/i, (ext) => ` (edited)${ext || '.pdf'}`);
-        const bytes = await savePdf(doc.pdf, { flatten: !!args.flatten });
+        const bytes = await savePdf(doc.pdf, { flatten: !!args.flatten, font: await fontBytes() });
         await writeFile(target, bytes);
         if (target === doc.file) doc.unsaved = false;
         return `Wrote ${target} (${Math.round(bytes.length / 1024)} KB, ${doc.pdf.pages.length} pages${args.flatten ? ', flattened' : ''}).`;
@@ -199,7 +203,7 @@ export function createPdfServer(options: ServerOptions = {}) {
         const ids = pagesOf(doc.pdf, args.pages);
         const target = allowed(String(args.file ?? ''));
         if (extname(target).toLowerCase() !== '.pdf') throw new ToolError('Write it to a file that ends in .pdf.');
-        await writeFile(target, await savePdf(extractPages(doc.pdf, ids, basename(target))));
+        await writeFile(target, await savePdf(extractPages(doc.pdf, ids, basename(target)), { font: await fontBytes() }));
         return `Wrote ${ids.length} ${ids.length === 1 ? 'page' : 'pages'} to ${target}.`;
       }
       case 'undo': {

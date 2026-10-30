@@ -31,6 +31,8 @@ export interface ViewerOptions {
   download?: boolean;
   /** The button to print the PDF. Shown unless false. */
   print?: boolean;
+  /** A TrueType or OpenType font to write text marks in, when the PDF is saved: see `SaveOptions` of the core. */
+  font?: Uint8Array;
   /** Whether the fields of a form can be filled. They can unless false. */
   fill?: boolean;
   /** Told the Pdf after a field is filled. */
@@ -768,7 +770,7 @@ export class Viewer {
 
   /** Saves the PDF as it is now and gives it to the person as a file. */
   async download(): Promise<void> {
-    const bytes = await savePdf(this.pdf);
+    const bytes = await savePdf(this.pdf, { font: this.options.font });
     const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' }));
     const a = this.doc.createElement('a');
     a.href = url;
@@ -779,7 +781,7 @@ export class Viewer {
 
   /** Prints the PDF as it is now, as the browser prints a PDF. */
   async print(): Promise<void> {
-    const bytes = await savePdf(this.pdf);
+    const bytes = await savePdf(this.pdf, { font: this.options.font });
     const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' }));
     const frame = this.doc.createElement('iframe');
     frame.setAttribute('aria-hidden', 'true');

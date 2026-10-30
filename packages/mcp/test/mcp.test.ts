@@ -119,6 +119,19 @@ describe('the MCP server', () => {
     expect((await call('read_pdf')).text).toBe('No PDF is open: open one with open_pdf.');
   });
 
+  it('writes in the font it is given, letters Helvetica has not', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'rebopdf-'));
+    await writeFile(join(dir, 'contract.pdf'), await samplePdfBytes('en'));
+    const font = new URL('../../../node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf', import.meta.url).pathname;
+    const server = createPdfServer({ cwd: dir, font });
+    const call = (name: string, args: Record<string, unknown>) => server.handle({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } });
+    await call('open_pdf', { file: 'contract.pdf' });
+    await call('add_text', { page: 1, x: 64, y: 760, text: 'Москва' });
+    await call('save_pdf', { file: 'out.pdf' });
+    const saved = await openPdf(new Uint8Array(await readFile(join(dir, 'out.pdf'))));
+    expect((await pageText(saved, saved.pages[0].id)).text).toContain('Москва');
+  });
+
   it('keeps to its folders', async () => {
     const { call } = await setup();
     const outside = await call('open_pdf', { file: '/etc/hosts' });
