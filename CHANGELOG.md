@@ -33,6 +33,19 @@ The first version to go to npm: 0.1.0 never went, and what it has is here.
   bytes again: PDF.js draws it from bytes without them (`pdf.drawn`), and
   they are taken off its pages when it is saved (`pdf.taken`).
 
+- **Forms made here** (`addField`, `updateField`, `removeField`; the tool
+  of fields, F): text fields, checkboxes, lists of choices and signature
+  fields drawn on the pages, named, required, of one line or several,
+  moved and resized by their boxes, and put in the form of the PDF when it
+  is saved. **Found by themselves** (`detectFields`, Find the fields): a
+  line of underscores to write on is a text field, a box drawn with a
+  letter (☐) a checkbox, each named by the words beside it.
+- **Signature fields** (`kind: 'signature'`): one not signed shows Sign
+  here, which puts the signature of the person in its box; the fields of
+  the kind a PDF comes with are read too.
+- The viewer drew the pages from the bytes a PDF came with, its
+  annotations taken as marks drawn twice: it draws them from those without.
+
 ### Fixed
 
 - A signature field, and a button, were taken out of the form when the PDF

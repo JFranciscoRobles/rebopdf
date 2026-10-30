@@ -8,6 +8,8 @@
 import {
   type Field,
   linksOf,
+  overlaps,
+  type Rect,
   type Match,
   marksOn,
   type OutlineItem,
@@ -19,7 +21,7 @@ import {
   pageNumber,
   pageSize,
   pdfjs,
-  readerOf,
+  readerFor,
   savePdf,
   searchPdf,
   setField,
@@ -59,6 +61,10 @@ export interface ViewerOptions {
   onPage?: (id: string) => void;
   /** @internal What the editor adds to the thumbnail of each page. */
   decorateThumb?: (item: HTMLLIElement, page: Page) => void;
+  /** @internal What the editor lays over each page, after the viewer has laid its own. */
+  decoratePage?: (view: PageView) => void;
+  /** @internal What is done when a signature field is pressed: the editor signs it. */
+  onSign?: (field: Field, rect: Rect) => void;
 }
 
 /** @internal What is kept of each page on the screen. */
@@ -187,7 +193,7 @@ export class Viewer {
     right.append(searchButton);
     if (options.print !== false) {
       const print = this.button('print', t.print, () => void this.print());
-      print.classList.add('rp-hide-narrow');
+      print.classList.add('rp-hide-narrow', 'rp-hide-medium');
       right.append(print);
     }
     if (options.download !== false) right.append(this.button('download', t.download, () => void this.download()));
@@ -553,7 +559,7 @@ export class Viewer {
 
   private async drawThumb(li: HTMLLIElement, page: Page) {
     try {
-      const proxy = await (await readerOf(this.pdf.sources[page.source])).getPage(page.index + 1);
+      const proxy = await (await readerFor(this.pdf, page.source)).getPage(page.index + 1);
       const sheet = li.querySelector<HTMLElement>('.rp-thumb-sheet')!;
       const ratio = Math.min(2, this.doc.defaultView?.devicePixelRatio ?? 1);
       const width = Number.parseFloat(sheet.style.width);
@@ -623,11 +629,16 @@ export class Viewer {
   overlay(view: PageView) {
     this.drawLinks(view);
     renderMarks(view.marks, marksOn(this.pdf, view.page.id), view.geo, this.t);
+    const signatures = this.pdf.marks.flatMap((m) => (m.kind === 'signature' && m.page === view.page.id ? [m.rect] : []));
     renderFields(view.fields, this.pdf.fields, view.page.id, view.geo, {
       editable: this.options.fill !== false,
       onChange: (field, value) => this.fillField(field, value),
+      signHere: this.t.signHere,
+      onSign: this.options.onSign,
+      signed: (rect) => signatures.some((s) => overlaps(s, rect)),
     });
     this.drawHits(view);
+    this.options.decoratePage?.(view);
   }
 
   private fillField(field: Field, value: Field['value']) {
@@ -675,7 +686,7 @@ export class Viewer {
     const key = this.keyOf(view);
     const { page } = view;
     try {
-      const reader = await readerOf(this.pdf.sources[page.source]);
+      const reader = await readerFor(this.pdf, page.source);
       const proxy = await reader.getPage(page.index + 1);
       if (this.keyOf(view) !== key || this.destroyed) return;
       const viewport = proxy.getViewport({ scale: this.scale, rotation: page.rotation });

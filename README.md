@@ -55,7 +55,7 @@ await writeFile('filled.pdf', await savePdf(pdf)); // or { flatten: true }
 - **Read:** the pages drawn as they come near the view, thumbnails at the side, the page in view and a box to go to one, zoom (to the width, to the page, or 25% to 400%; ⌘ and the wheel), and the text over each page to select and copy.
 - **Links and contents:** the links of the pages lead where they lead, and the table of contents of a book or a paper is a tab beside the pages.
 - **Search:** without minding capitals or accents ("accion" finds "Acción"), across the end of a line, every place shown, the next and the one before with Enter and Shift+Enter.
-- **Forms:** text, checkboxes, radio buttons, choices and lists, filled in the page and saved as a form.
+- **Forms:** text, checkboxes, radio buttons, choices and lists, filled in the page and saved as a form; and made: fields drawn on the pages (text, checkboxes, choices, signature fields), or found by themselves in a PDF with lines to write on and boxes to tick.
 - **Marks:** highlights of the text selected (with a comment), notes, drawing by hand, text written on the page (to fill a form with no fields), and signatures, drawn, typed or a picture. Each chosen to move by dragging or by the arrows, to colour, to change and to delete.
 - **Comments made elsewhere:** the highlights, notes and drawings a PDF comes with (from Acrobat, Preview or any reader) are changed and deleted as those made here.
 - **Pages:** turned, deleted, moved by dragging their thumbnails or by Alt and the arrows, taken out as a PDF of their own, blank ones put in, and the pages of other PDFs put in by dropping them on the editor.
@@ -124,7 +124,7 @@ npm run lint
 
 | | |
 | --- | --- |
-| V · H · N · D · T · S · R | Select and fill · Highlight · Note · Draw · Text · Sign · Black out |
+| V · H · N · D · T · S · R · F | Select and fill · Highlight · Note · Draw · Text · Sign · Black out · Form fields |
 | ⌘F | Search |
 | ⌘Z · ⇧⌘Z | Undo · Redo |
 | ⌘+ · ⌘− · ⌘0 | Zoom in · out · automatic (⌘ and the wheel, or two fingers: toward where they are) |

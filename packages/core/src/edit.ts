@@ -4,7 +4,7 @@
 
 import { PDFDocument } from '@cantoo/pdf-lib';
 import { openPdf, uid } from './open';
-import { type Field, type Mark, type MarkPatch, type NewMark, type Page, type Pdf, PdfError } from './types';
+import { type Field, type FieldKind, type Mark, type MarkPatch, type NewMark, type Page, type Pdf, PdfError, type Rect } from './types';
 
 /** The page of this id. */
 export const pageById = (pdf: Pdf, id: string): Page | undefined => pdf.pages.find((page) => page.id === id);
@@ -199,5 +199,87 @@ function checkValue(field: Field, value: Field['value']): Field['value'] {
       if (wrong.length) throw new PdfError('not-found', `${field.name} takes some of: ${options.join(', ')}.`);
       return list;
     }
+    case 'signature':
+      throw new PdfError('not-found', `${field.name} is to be signed, not filled: sign it with signPdf, or put a signature mark in it.`);
   }
+}
+
+/** A field to make: its kind, its place, and, when it has them, its name, its choices and what it holds. */
+export interface NewField {
+  kind: Exclude<FieldKind, 'radio'>;
+  page: string;
+  rect: Rect;
+  name?: string;
+  /** What it is called for a person: shown over it, and read by screen readers. */
+  label?: string;
+  options?: string[];
+  multiline?: boolean;
+  required?: boolean;
+  value?: Field['value'];
+}
+
+/** A name for a field as PDFs name them: no dots, which make a tree of names, no spaces at its ends. */
+const fieldName = (name: string) =>
+  name
+    .trim()
+    .replace(/[.\s]+/g, '_')
+    .replace(/^_+|_+$/g, '') || 'field';
+
+/** A name not taken among the fields of a file: the one asked, or it with a number after it. */
+function freeName(pdf: Pdf, source: string, wanted: string): string {
+  const taken = new Set(pdf.fields.filter((f) => f.source === source).map((f) => f.name));
+  if (!taken.has(wanted)) return wanted;
+  for (let n = 2; ; n++) if (!taken.has(`${wanted}_${n}`)) return `${wanted}_${n}`;
+}
+
+/** Makes a field of a form on a page: put in the form of the PDF when it is saved. */
+export function addField(pdf: Pdf, field: NewField): Pdf {
+  const page = pageById(pdf, field.page);
+  if (!page) throw new PdfError('not-found', `There is no page ${field.page}.`);
+  if ((field.kind === 'choice' || field.kind === 'list') && !field.options?.length) throw new PdfError('not-found', 'A choice needs its options.');
+  const name = freeName(pdf, page.source, fieldName(field.name ?? field.label ?? field.kind));
+  const empty: Record<NewField['kind'], Field['value']> = { text: '', checkbox: false, choice: '', list: [], signature: '' };
+  const made: Field = {
+    id: `${page.source}/${name}`,
+    source: page.source,
+    name,
+    kind: field.kind,
+    value: empty[field.kind],
+    widgets: [{ page: page.id, rect: field.rect }],
+    created: true,
+    ...(field.label ? { label: field.label } : {}),
+    ...(field.options ? { options: field.options } : {}),
+    ...(field.multiline ? { multiline: true } : {}),
+    ...(field.required ? { required: true } : {}),
+  };
+  const next = { ...pdf, fields: [...pdf.fields, made] };
+  return field.value === undefined || field.kind === 'signature' ? next : setField(next, made.id, field.value);
+}
+
+/** Changes a field: its name, what it is called, its place (of a field of one place), its choices, whether it must be filled. */
+export function updateField(pdf: Pdf, key: string, patch: Partial<Pick<NewField, 'name' | 'label' | 'rect' | 'options' | 'multiline' | 'required'>>): Pdf {
+  const field = findField(pdf, key);
+  if (!field) throw new PdfError('not-found', `There is no field ${key}.`);
+  const others = { ...pdf, fields: pdf.fields.filter((f) => f !== field) };
+  const name = patch.name === undefined ? field.name : freeName(others, field.source, fieldName(patch.name));
+  const changed: Field = {
+    ...field,
+    name,
+    id: `${field.source}/${name}`,
+    ...(patch.label !== undefined ? { label: patch.label || undefined } : {}),
+    ...(patch.options
+      ? { options: patch.options, value: field.kind === 'list' ? (field.value as string[]).filter((v) => patch.options!.includes(v)) : patch.options.includes(String(field.value)) ? field.value : '' }
+      : {}),
+    ...(patch.multiline !== undefined ? { multiline: patch.multiline || undefined } : {}),
+    ...(patch.required !== undefined ? { required: patch.required || undefined } : {}),
+    ...(patch.rect && field.widgets.length === 1 ? { widgets: [{ ...field.widgets[0], rect: patch.rect }] } : {}),
+  };
+  return { ...pdf, fields: pdf.fields.map((f) => (f === field ? changed : f)) };
+}
+
+/** Takes a field out of the form. */
+export function removeField(pdf: Pdf, key: string): Pdf {
+  const field = findField(pdf, key);
+  if (!field) throw new PdfError('not-found', `There is no field ${key}.`);
+  return { ...pdf, fields: pdf.fields.filter((f) => f !== field) };
 }

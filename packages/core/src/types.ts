@@ -34,7 +34,8 @@ export interface Page {
   rotation: 0 | 90 | 180 | 270;
 }
 
-export type FieldKind = 'text' | 'checkbox' | 'radio' | 'choice' | 'list';
+/** A signature field is where a PDF is to be signed: it holds nothing to fill, and is signed by `signPdf`. */
+export type FieldKind = 'text' | 'checkbox' | 'radio' | 'choice' | 'list' | 'signature';
 
 /** A field of a form, with what it holds. */
 export interface Field {
@@ -56,6 +57,8 @@ export interface Field {
   required?: boolean;
   /** Where it is shown: on which page, and, for a radio, which choice each one is. */
   widgets: { page: string; rect: Rect; option?: string }[];
+  /** Made here, not in the file: put in its form when it is saved. */
+  created?: boolean;
 }
 
 /** A colour, as "#rrggbb". */

@@ -236,6 +236,11 @@ export interface FieldEvents {
   /** Whether what they hold can be changed. */
   editable: boolean;
   onChange(field: Field, value: Field['value']): void;
+  /** What a signature field not signed says, and what is done when it is pressed; without it, it cannot be. */
+  signHere: string;
+  onSign?: (field: Field, rect: Rect) => void;
+  /** Whether a place is signed already, by a signature put over it: its field is not shown then. */
+  signed?: (rect: Rect) => boolean;
 }
 
 /**
@@ -249,13 +254,14 @@ export function renderFields(layer: HTMLElement, fields: Field[], page: string, 
   for (const field of fields) {
     field.widgets.forEach((widget, i) => {
       if (widget.page !== page) return;
+      if (field.kind === 'signature' && events.signed?.(widget.rect)) return;
       const key = `${field.id}#${i}#${field.kind}`;
       let el = before.get(key);
       if (!el) {
         el = makeControl(doc, field, widget.option, events);
         el.dataset.key = key;
       }
-      update(el, field, widget.option, events.editable);
+      update(el, field, widget.option, events);
       placeTurned(el, widget.rect, geo);
       if (field.kind === 'text' || field.kind === 'choice' || field.kind === 'list') {
         const lines = field.kind === 'list' ? 4 : field.multiline ? 3 : 1;
@@ -303,6 +309,18 @@ function makeInput(doc: Document, field: Field, option: string | undefined, even
       el.addEventListener('change', () => events.onChange(field, field.kind === 'list' ? [...el.selectedOptions].map((o) => o.value) : el.value));
       return el;
     }
+    case 'signature': {
+      const el = doc.createElement('button');
+      el.type = 'button';
+      el.className = 'rp-field rp-sign-here';
+      el.textContent = events.signHere;
+      el.setAttribute('aria-label', `${events.signHere}: ${label}`);
+      el.addEventListener('click', () => {
+        const widget = field.widgets.find((w) => w.option === option) ?? field.widgets[0];
+        events.onSign?.(field, widget.rect);
+      });
+      return el;
+    }
     default: {
       const el = doc.createElement(field.multiline ? 'textarea' : 'input');
       el.className = 'rp-field';
@@ -314,9 +332,14 @@ function makeInput(doc: Document, field: Field, option: string | undefined, even
   }
 }
 
-function update(el: HTMLElement, field: Field, option: string | undefined, editable: boolean) {
+function update(el: HTMLElement, field: Field, option: string | undefined, events: FieldEvents) {
+  const editable = events.editable;
   const locked = !editable || !!field.readOnly;
   if (field.required) el.setAttribute('aria-required', 'true');
+  if (field.kind === 'signature') {
+    el.toggleAttribute('disabled', !events.onSign);
+    return;
+  }
   if (el instanceof HTMLButtonElement) {
     const on = field.kind === 'checkbox' ? field.value === true : field.value === option;
     el.dataset.value = String(field.value);

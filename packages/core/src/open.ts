@@ -193,6 +193,8 @@ function readField(field: PDFField): Pick<Field, 'kind' | 'value' | 'options' | 
   if (field instanceof PDFRadioGroup) return { kind: 'radio', value: field.getSelected() ?? '', options: field.getOptions() };
   if (field instanceof PDFDropdown) return { kind: 'choice', value: field.getSelected()[0] ?? '', options: field.getOptions() };
   if (field instanceof PDFOptionList) return { kind: 'list', value: field.getSelected(), options: field.getOptions() };
-  // Buttons and signature fields hold nothing to fill.
+  // A signature field not signed yet is where the PDF is to be signed; one signed is among its signatures.
+  if (field instanceof PDFSignature && !field.acroField.dict.get(PDFName.of('V'))) return { kind: 'signature', value: '' };
+  // Buttons hold nothing to fill.
   return undefined;
 }

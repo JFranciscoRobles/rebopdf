@@ -31,6 +31,7 @@ const en = {
   failed: 'This page could not be drawn.',
   note: 'Note',
   signature: 'Signature',
+  signHere: 'Sign here',
   redaction: 'To be blacked out',
 };
 
@@ -67,6 +68,7 @@ const es: Strings = {
   failed: 'Esta página no se pudo dibujar.',
   note: 'Nota',
   signature: 'Firma',
+  signHere: 'Firmar aquí',
   redaction: 'Por tachar',
 };
 

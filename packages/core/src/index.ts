@@ -1,7 +1,9 @@
 // The API of @rebopdf/core: a PDF opened, changed and saved, its text read
 // and searched. It runs in the browser and in Node alike.
 
+export { detectFields } from './detect';
 export {
+  addField,
   addMark,
   extractPages,
   fieldsOn,
@@ -15,10 +17,13 @@ export {
   pageById,
   pageNumber,
   pageSize,
+  type NewField,
+  removeField,
   removeMark,
   removePages,
   rotatePages,
   setField,
+  updateField,
   updateMark,
 } from './edit';
 export { linksOf, type OutlineItem, outlineOf, type PageLink, type Place } from './links';

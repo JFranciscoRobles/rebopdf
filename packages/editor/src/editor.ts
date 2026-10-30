@@ -5,7 +5,10 @@
 // saved or downloaded. Every change is a new Pdf of the engine.
 
 import {
+  addField,
   addMark,
+  detectFields,
+  type Field,
   extractPages,
   insertBlankPage,
   insertPdf,
@@ -21,6 +24,7 @@ import {
   type Point,
   pageNumber,
   type Rect,
+  removeField,
   removeMark,
   removePages,
   rotatePages,
@@ -28,14 +32,18 @@ import {
   savePdf,
   savesIncrementally,
   whyNotIncremental,
+  updateField,
   updateMark,
 } from '@rebopdf/core';
-import { fill, type Geometry, type IconName, icon, makeOption, mountViewer, pathData, type Viewer, type Zoom } from '@rebopdf/viewer';
+import { fill, type Geometry, type IconName, icon, makeOption, mountViewer, type PageView, pathData, type Viewer, type Zoom } from '@rebopdf/viewer';
 import { type EditorStrings, editorStringsFor } from './i18n';
 import { askSignature, type Signature } from './signature';
 import { injectEditorStyles } from './styles';
 
-export type Tool = 'select' | 'highlight' | 'note' | 'ink' | 'text' | 'sign' | 'redact';
+export type Tool = 'select' | 'highlight' | 'note' | 'ink' | 'text' | 'sign' | 'redact' | 'field';
+
+/** The kinds of fields made with the tool of fields. */
+export type FieldTool = 'text' | 'checkbox' | 'choice' | 'signature';
 
 export interface EditorOptions {
   /** The PDF to work on; without one, the editor asks for a file. */
@@ -78,6 +86,7 @@ const TOOLS: { tool: Tool; icon: IconName; key: string }[] = [
   { tool: 'text', icon: 'text', key: 't' },
   { tool: 'sign', icon: 'signature', key: 's' },
   { tool: 'redact', icon: 'redact', key: 'r' },
+  { tool: 'field', icon: 'form', key: 'f' },
 ];
 
 const HISTORY = 100;
@@ -95,7 +104,11 @@ export class Editor {
   private group = '';
   private groupTime = 0;
   private tool: Tool = 'select';
-  private colors: Record<Tool, ColorName> = { select: 'yellow', highlight: 'yellow', note: 'yellow', ink: 'blue', text: 'black', sign: 'black', redact: 'black' };
+  private colors: Record<Tool, ColorName> = { select: 'yellow', highlight: 'yellow', note: 'yellow', ink: 'blue', text: 'black', sign: 'black', redact: 'black', field: 'black' };
+  /** The kind of field the tool of fields makes, and the field chosen. */
+  private fieldKind: FieldTool = 'text';
+  private chosenField = '';
+  private kindButton?: HTMLButtonElement;
   private chosen = '';
   private chosenPages = new Set<string>();
   private lastPage = '';
@@ -160,6 +173,8 @@ export class Editor {
       font: this.options.font,
       onChange: (next) => this.commit(next, 'fields', false),
       decorateThumb: (li, page) => this.decorateThumb(li, page),
+      decoratePage: (view) => this.design(view),
+      onSign: (field, rect) => void this.signField(field, rect),
     });
     this.viewer = viewer;
     const root = viewer.root;
@@ -179,7 +194,7 @@ export class Editor {
     tools.setAttribute('role', 'group');
     tools.setAttribute('aria-label', t.tools);
     for (const { tool, icon: name, key } of TOOLS) {
-      const label = { select: t.select, highlight: t.highlight, note: t.note, ink: t.draw, text: t.text, sign: t.sign, redact: t.redact }[tool];
+      const label = { select: t.select, highlight: t.highlight, note: t.note, ink: t.draw, text: t.text, sign: t.sign, redact: t.redact, field: t.fields }[tool];
       const b = this.button(name, `${label} (${key.toUpperCase()})`, () => void this.setTool(tool));
       b.setAttribute('aria-label', label);
       b.setAttribute('aria-pressed', String(tool === this.tool));
@@ -196,7 +211,13 @@ export class Editor {
     color.append(this.swatch);
     color.addEventListener('click', () => this.colorMenu(color));
     this.buttons.color = color;
-    tools.append(color);
+    const kind = this.doc.createElement('button');
+    kind.type = 'button';
+    kind.className = 'rp-button';
+    kind.setAttribute('aria-haspopup', 'true');
+    kind.addEventListener('click', () => this.kindMenu(kind));
+    this.kindButton = kind;
+    tools.append(color, kind);
 
     const save = this.doc.createElement('button');
     save.type = 'button';
@@ -337,8 +358,15 @@ export class Editor {
       const label = fill(this.t.colorNamed, { name: this.t.colors[name] });
       color.title = label;
       color.setAttribute('aria-label', label);
-      color.hidden = this.tool === 'select' || this.tool === 'sign' || this.tool === 'redact';
+      color.hidden = this.tool === 'select' || this.tool === 'sign' || this.tool === 'redact' || this.tool === 'field';
     }
+    if (this.kindButton) {
+      this.kindButton.hidden = this.tool !== 'field';
+      const label = `${this.t.fieldKinds[this.fieldKind]} ▾`;
+      this.kindButton.textContent = label;
+      this.kindButton.setAttribute('aria-label', `${this.t.fieldKind}: ${this.t.fieldKinds[this.fieldKind]}`);
+    }
+    for (const view of this.viewer?.views.values() ?? []) this.design(view);
     this.showChosen();
     for (const li of this.viewer?.root.querySelectorAll<HTMLElement>('.rp-thumb') ?? []) li.setAttribute('aria-selected', String(this.chosenPages.has(li.dataset.page!)));
   }
@@ -414,14 +442,20 @@ export class Editor {
       case 'redact':
         this.drawBox(event as PointerEvent, at);
         return;
+      case 'field': {
+        const box = (event.target as Element).closest<HTMLElement>('.rp-design-box');
+        if (box) this.moveField(event as PointerEvent, at, box.dataset.field!, !!(event.target as Element).closest('.rp-handle'));
+        else this.drawBox(event as PointerEvent, at, (rect) => this.makeField(at.id, rect));
+        return;
+      }
       default:
     }
   }
 
-  /** Draws a box with the pointer, to be blacked out. */
-  private drawBox(event: PointerEvent, at: NonNullable<ReturnType<Editor['at']>>) {
+  /** Draws a box with the pointer: to be blacked out, or, given what to do with it, a field. */
+  private drawBox(event: PointerEvent, at: NonNullable<ReturnType<Editor['at']>>, done?: (rect: Rect) => void) {
     const box = this.doc.createElement('div');
-    box.className = 'rp-boxing';
+    box.className = done ? 'rp-boxing rp-boxing-field' : 'rp-boxing';
     at.el.append(box);
     let end = at.screen;
     const place = () => {
@@ -448,6 +482,7 @@ export class Editor {
       const a = at.geo.toPage(at.screen);
       const b = at.geo.toPage(end);
       const rect = { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(a.x - b.x), height: Math.abs(a.y - b.y) };
+      if (done) return done(rect);
       if (rect.width < 3 || rect.height < 3) return;
       this.commit(addMark(this.current, { kind: 'redaction', page: at.id, rects: [rect], author: this.options.author }));
       this.say(this.t.redactInfo);
@@ -683,6 +718,240 @@ export class Editor {
     at.el.addEventListener('pointermove', move);
     at.el.addEventListener('pointerup', up);
     at.el.addEventListener('pointercancel', up);
+  }
+
+  /** Lays the fields of a page over it as boxes to move, resize and change, while the tool of fields is in hand. */
+  private design(view: PageView) {
+    let layer = view.el.querySelector<HTMLElement>(':scope > .rp-design');
+    if (this.tool !== 'field' || !this.current) {
+      layer?.remove();
+      return;
+    }
+    if (!layer) {
+      layer = this.doc.createElement('div');
+      layer.className = 'rp-layer rp-design';
+      view.el.append(layer);
+    }
+    const boxes: HTMLElement[] = [];
+    for (const field of this.current.fields) {
+      field.widgets.forEach((widget) => {
+        if (widget.page !== view.page.id) return;
+        const box = this.doc.createElement('div');
+        box.className = 'rp-design-box';
+        box.dataset.field = field.id;
+        box.dataset.kind = field.kind;
+        box.setAttribute('role', 'button');
+        box.tabIndex = 0;
+        box.setAttribute('aria-label', `${this.t.fieldKinds[field.kind as FieldTool] ?? field.kind}: ${field.label ?? field.name}`);
+        if (field.id === this.chosenField) box.setAttribute('aria-pressed', 'true');
+        const s = view.geo.toScreenRect(widget.rect);
+        Object.assign(box.style, { left: `${s.x}px`, top: `${s.y}px`, width: `${s.width}px`, height: `${s.height}px` });
+        const name = this.doc.createElement('span');
+        name.textContent = field.label ?? field.name;
+        box.append(name);
+        if (field.id === this.chosenField && field.widgets.length === 1 && !view.geo.rotation) {
+          const handle = this.doc.createElement('div');
+          handle.className = 'rp-handle';
+          Object.assign(handle.style, { left: '100%', top: '100%' });
+          box.append(handle);
+        }
+        box.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            this.chooseField(field.id);
+            this.fieldMenu(field.id, true);
+          }
+        });
+        boxes.push(box);
+      });
+    }
+    layer.replaceChildren(...boxes);
+  }
+
+  private chooseField(id: string) {
+    this.chosenField = id;
+    for (const view of this.viewer?.views.values() ?? []) this.design(view);
+  }
+
+  /** A field made where a box was drawn, or, for a click, as big as its kind is by default. */
+  private makeField(page: string, drawn: Rect) {
+    if (!this.current) return;
+    const size = { text: [180, 18], checkbox: [12, 12], choice: [140, 18], signature: [180, 50] }[this.fieldKind];
+    const rect = drawn.width < 4 || drawn.height < 4 ? { x: drawn.x, y: drawn.y + drawn.height - size[1], width: size[0], height: size[1] } : drawn;
+    const t = this.t;
+    const next = addField(this.current, {
+      kind: this.fieldKind,
+      page,
+      rect,
+      label: { text: t.fieldKinds.text, checkbox: t.fieldKinds.checkbox, choice: t.fieldKinds.choice, signature: t.fieldKinds.signature }[this.fieldKind],
+      ...(this.fieldKind === 'choice' ? { options: [t.option(1), t.option(2)] } : {}),
+    });
+    this.commit(next);
+    const made = next.fields.at(-1)!;
+    this.chooseField(made.id);
+    this.fieldMenu(made.id, true);
+  }
+
+  /** Moves a field with the pointer, or resizes it by its corner; a click without moving shows what can be changed of it. */
+  private moveField(event: PointerEvent, at: NonNullable<ReturnType<Editor['at']>>, id: string, resizing: boolean) {
+    event.preventDefault();
+    const from = this.current!;
+    const field = from.fields.find((f) => f.id === id);
+    if (!field) return;
+    this.chooseField(id);
+    const start = at.point;
+    const rect = field.widgets.find((w) => w.page === at.id)?.rect ?? field.widgets[0].rect;
+    let moved = false;
+    at.el.setPointerCapture(event.pointerId);
+    const move = (e: PointerEvent) => {
+      if (!moved && Math.hypot(e.clientX - event.clientX, e.clientY - event.clientY) < 4) return;
+      moved = true;
+      const box = at.el.getBoundingClientRect();
+      const now = at.geo.toPage({ x: e.clientX - box.left, y: e.clientY - box.top });
+      const [dx, dy] = [now.x - start.x, now.y - start.y];
+      const next = resizing
+        ? { x: rect.x, y: rect.y + Math.min(dy, rect.height - 6), width: Math.max(6, rect.width + dx), height: Math.max(6, rect.height - dy) }
+        : { ...rect, x: rect.x + dx, y: rect.y + dy };
+      if (field.widgets.length !== 1) return;
+      this.current = updateField(from, id, { rect: next });
+      this.viewer?.setPdf(this.current);
+    };
+    const up = () => {
+      at.el.removeEventListener('pointermove', move);
+      at.el.removeEventListener('pointerup', up);
+      at.el.removeEventListener('pointercancel', up);
+      if (moved) {
+        const after = this.current!;
+        this.current = from;
+        this.commit(after, '', false);
+      } else this.fieldMenu(id, false);
+    };
+    at.el.addEventListener('pointermove', move);
+    at.el.addEventListener('pointerup', up);
+    at.el.addEventListener('pointercancel', up);
+  }
+
+  /** What can be changed of a field: what it is called, whether it must be filled, its choices; or delete it. */
+  private fieldMenu(id: string, focus: boolean) {
+    const field = this.current?.fields.find((f) => f.id === id);
+    if (!field || !this.viewer) return;
+    const t = this.t;
+    let key = field.id;
+    const change = (patch: Parameters<typeof updateField>[2]) => {
+      if (!this.current) return;
+      const next = updateField(this.current, key, patch);
+      key = next.fields.find((f) => f.widgets === this.current!.fields.find((g) => g.id === key)?.widgets)?.id ?? key;
+      this.commit(next, `field:${field.id}`);
+      this.chosenField = key;
+    };
+    const items: HTMLElement[] = [];
+    const name = this.doc.createElement('input');
+    name.className = 'rp-input';
+    name.value = field.label ?? field.name;
+    name.setAttribute('aria-label', t.fieldName);
+    name.placeholder = t.fieldName;
+    name.addEventListener('input', () => name.value.trim() && change({ label: name.value.trim(), name: name.value.trim() }));
+    items.push(this.labelled(t.fieldName, name));
+    if (field.kind === 'choice' || field.kind === 'list') {
+      const options = this.doc.createElement('textarea');
+      options.className = 'rp-input';
+      options.value = (field.options ?? []).join('\n');
+      options.setAttribute('aria-label', t.fieldOptions);
+      options.addEventListener('input', () => {
+        const list = options.value
+          .split('\n')
+          .map((o) => o.trim())
+          .filter(Boolean);
+        if (list.length) change({ options: list });
+      });
+      items.push(this.labelled(t.fieldOptions, options));
+    }
+    const toggles: HTMLElement[] = [];
+    const toggle = (text: string, on: boolean, set: (on: boolean) => void) => {
+      const box = this.doc.createElement('input');
+      box.type = 'checkbox';
+      box.checked = on;
+      box.addEventListener('change', () => set(box.checked));
+      toggles.push(this.labelled(text, box));
+    };
+    if (field.kind !== 'signature') toggle(t.fieldRequired, !!field.required, (on) => change({ required: on }));
+    if (field.kind === 'text') toggle(t.fieldMultiline, !!field.multiline, (on) => change({ multiline: on }));
+    const remove = this.doc.createElement('button');
+    remove.type = 'button';
+    remove.className = 'rp-button';
+    remove.append(icon(this.doc, 'trash', 16), t.remove);
+    remove.addEventListener('click', () => this.removeChosenField());
+    items.push(this.row(toggles, [remove]));
+    const box = this.viewer.root.querySelector(`.rp-design-box[data-field="${CSS.escape(id)}"]`);
+    this.openPop(box?.getBoundingClientRect() ?? this.viewer.scroll.getBoundingClientRect(), items, () =>
+      this.viewer?.root.querySelector(`.rp-design-box[data-field="${CSS.escape(this.chosenField)}"]`),
+    );
+    if (focus) name.select();
+  }
+
+  private removeChosenField() {
+    if (!this.current || !this.chosenField) return;
+    const id = this.chosenField;
+    this.closePop();
+    this.chosenField = '';
+    this.commit(removeField(this.current, id));
+  }
+
+  /** The kind of field the tool makes, and finding the fields a PDF with no form asks for. */
+  private kindMenu(anchor: HTMLElement) {
+    const t = this.t;
+    const items = (['text', 'checkbox', 'choice', 'signature'] as FieldTool[]).map((kind) => {
+      const b = this.doc.createElement('button');
+      b.type = 'button';
+      b.className = 'rp-button';
+      b.setAttribute('role', 'menuitemradio');
+      b.setAttribute('aria-checked', String(kind === this.fieldKind));
+      b.textContent = t.fieldKinds[kind];
+      b.addEventListener('click', () => {
+        this.fieldKind = kind;
+        this.closePop();
+        this.refresh();
+        anchor.focus();
+      });
+      return b;
+    });
+    const detect = this.doc.createElement('button');
+    detect.type = 'button';
+    detect.className = 'rp-button';
+    detect.setAttribute('role', 'menuitem');
+    detect.append(icon(this.doc, 'search', 16), t.detectFields);
+    detect.addEventListener('click', () => {
+      this.closePop();
+      void this.detect();
+    });
+    this.openPop(anchor.getBoundingClientRect(), [...items, detect]);
+    this.pop?.classList.add('rp-menu');
+    this.pop?.setAttribute('role', 'menu');
+    (items.find((b) => b.getAttribute('aria-checked') === 'true') ?? items[0]).focus();
+  }
+
+  /** Makes fields of the lines to write on and the boxes to tick the text of the PDF has. */
+  async detect(): Promise<number> {
+    if (!this.current) return 0;
+    const found = await detectFields(this.current);
+    let next = this.current;
+    for (const field of found) next = addField(next, field);
+    if (found.length) this.commit(next);
+    this.toast(found.length ? fill(this.t.detected, { n: found.length }) : this.t.noneDetected);
+    return found.length;
+  }
+
+  /** Signs a signature field: the signature of the person, put in its box. */
+  private async signField(field: Field, rect: Rect) {
+    const made = this.signature ?? (await askSignature(this.viewer!.root, this.t));
+    if (!made || !this.current) return;
+    this.signature = made;
+    const page = field.widgets.find((w) => w.rect === rect)?.page ?? field.widgets[0].page;
+    // As big as it fits in the box, in its middle.
+    const fit = Math.min(rect.width / made.aspect, rect.height);
+    const [width, height] = [fit * made.aspect, fit];
+    const box = { x: rect.x + (rect.width - width) / 2, y: rect.y + (rect.height - height) / 2, width, height };
+    this.commit(addMark(this.current, { kind: 'signature', page, rect: box, ...(made.image ? { image: made.image } : { paths: made.paths }), color: '#0b1f4d' }));
   }
 
   private placeSignature(page: string, point: Point, geo: Geometry) {
@@ -1353,6 +1622,11 @@ export class Editor {
     if (event.key === 'Enter' && (this.tool === 'note' || this.tool === 'text' || this.tool === 'sign') && !target.closest('button')) {
       event.preventDefault();
       this.placeByKey();
+      return;
+    }
+    if ((event.key === 'Delete' || event.key === 'Backspace') && this.tool === 'field' && this.chosenField) {
+      event.preventDefault();
+      this.removeChosenField();
       return;
     }
     if ((event.key === 'Delete' || event.key === 'Backspace') && this.chosen) {

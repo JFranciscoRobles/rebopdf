@@ -146,6 +146,9 @@ const CSS = `
 .rp-field:disabled, .rp-field[aria-disabled="true"] { background: transparent; cursor: default; }
 textarea.rp-field { resize: none; padding-top: 2px; line-height: 1.2; }
 select.rp-field { padding: 0 2px; }
+.rp-sign-here { display: grid; place-items: center; padding: 0 6px; border: 1.5px dashed #b42318; border-radius: 4px; background: rgba(180, 35, 24, 0.06); color: #8a1c13; font: 600 12px var(--rp-font); cursor: pointer; overflow: hidden; white-space: nowrap; }
+.rp-sign-here:hover { background: rgba(180, 35, 24, 0.12); border-color: #b42318; }
+.rp-sign-here:disabled { cursor: default; opacity: 0.8; }
 .rp-check { display: grid; place-items: center; padding: 0; border-color: rgba(27, 27, 27, 0.55); cursor: pointer; }
 .rp-check svg { width: 85%; height: 85%; }
 .rp-check[aria-checked="false"] svg { visibility: hidden; }
@@ -158,6 +161,11 @@ select.rp-field { padding: 0 2px; }
 .rp-status { position: absolute; inset: 0; display: grid; place-items: center; color: var(--rp-muted); }
 .rp-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
+@media (max-width: 1400px) {
+  .rp-hide-medium { display: none !important; }
+  .rp-zoom { max-width: 104px; }
+  .rp-bar .rp-sep { margin: 0 3px; }
+}
 @media (max-width: 640px) {
   /* The tools float at the foot of the pages, where a thumb reaches them. */
   .rp-tools:not(:empty) { position: absolute; z-index: 7; left: 50%; bottom: 16px; padding: 4px; border: 1px solid var(--rp-border); border-radius: 14px; background: var(--rp-raised); box-shadow: var(--rp-shadow); transform: translateX(-50%); }

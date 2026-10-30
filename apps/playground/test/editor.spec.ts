@@ -467,3 +467,70 @@ test('a signed PDF is saved after its signature, its bytes as they came', async 
   expect(pdf.signatures).toHaveLength(1);
   await expect(page.getByRole('status')).toHaveText('Saved after the signature: it still holds.');
 });
+
+test('a form is made: fields drawn, named, found by themselves, moved and signed', async ({ page }) => {
+  await page.keyboard.press('f');
+  await expect(page.getByRole('button', { name: 'Form fields' })).toHaveAttribute('aria-pressed', 'true');
+  const two = pageEl(page, 2);
+  await two.scrollIntoViewIfNeeded();
+  const b = (await two.boundingBox())!;
+  // A text field, drawn.
+  await page.mouse.move(b.x + 80, b.y + 500);
+  await page.mouse.down();
+  await page.mouse.move(b.x + 320, b.y + 524, { steps: 6 });
+  await page.mouse.up();
+  await page.getByRole('textbox', { name: 'What it is called' }).fill('City');
+  await page.keyboard.press('Escape');
+  // A signature field, of the size it has, by a click.
+  await page.getByRole('button', { name: /Kind of field/ }).click();
+  await page.getByRole('menuitemradio', { name: 'Signature field' }).click();
+  await page.mouse.click(b.x + 80, b.y + 600);
+  await page.keyboard.press('Escape');
+  const state1 = await state(page);
+  expect(Object.keys(state1.fields)).toEqual(expect.arrayContaining(['City', 'Signature_field']));
+  // Moved by dragging its box.
+  const box = two.locator('.rp-design-box', { hasText: 'City' });
+  const before = (await box.boundingBox())!;
+  await page.mouse.move(before.x + 20, before.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(before.x + 60, before.y + 30, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(async () => (await box.boundingBox())!.x).toBeGreaterThan(before.x + 30);
+  // Filled and signed, with the tool to select and fill.
+  await page.keyboard.press('v');
+  await page.getByRole('textbox', { name: 'City' }).fill('Madrid');
+  await page.getByRole('button', { name: 'Sign here: Signature field' }).click();
+  await page.getByRole('tab', { name: 'Type' }).click();
+  await page.getByRole('textbox', { name: 'Your name' }).fill('Ana');
+  await page.getByRole('button', { name: 'Place it' }).click();
+  await expect(two.locator('.rp-mark-signature')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'Sign here: Signature field' })).toHaveCount(0);
+  const { pdf } = await downloaded(page);
+  const city = pdf.fields.find((f) => f.name === 'City');
+  expect(city).toMatchObject({ kind: 'text', value: 'Madrid', label: 'City' });
+  expect(pdf.fields.find((f) => f.name === 'Signature_field')?.kind).toBe('signature');
+});
+
+test('the fields a PDF with no form asks for are found and made at once', async ({ page }) => {
+  const { PDFDocument, StandardFonts } = await import('@cantoo/pdf-lib');
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const p = doc.addPage([595, 842]);
+  p.drawText('Name: ____________________', { x: 60, y: 760, size: 12, font });
+  p.drawText('Phone: ______________', { x: 60, y: 730, size: 12, font });
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'More' }).click();
+  await page.getByRole('menuitem', { name: 'Open a PDF…' }).click();
+  await (await chooser).setFiles({ name: 'Letter.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await doc.save()) });
+  await expect(page.locator('.rp-title')).toHaveText('Letter');
+  await page.locator('.rp-scroll').focus();
+  await page.keyboard.press('f');
+  await page.getByRole('button', { name: /Kind of field/ }).click();
+  await page.getByRole('menuitem', { name: 'Find the fields' }).click();
+  await expect(page.getByRole('status')).toHaveText('Found 2 fields: lines to write on and boxes to tick');
+  await page.keyboard.press('v');
+  await page.getByRole('textbox', { name: 'Name' }).fill('Ana');
+  await page.getByRole('textbox', { name: 'Phone' }).fill('555 0100');
+  const { pdf } = await downloaded(page);
+  expect(Object.fromEntries(pdf.fields.map((f) => [f.name, f.value]))).toEqual({ Name: 'Ana', Phone: '555 0100' });
+});

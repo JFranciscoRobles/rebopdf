@@ -5,6 +5,13 @@
 const CSS = `
 .rp-root[data-tool="note"] .rp-page, .rp-root[data-tool="text"] .rp-page, .rp-root[data-tool="sign"] .rp-page { cursor: crosshair; }
 .rp-root[data-tool="ink"] .rp-page, .rp-root[data-tool="redact"] .rp-page { cursor: crosshair; touch-action: none; }
+.rp-root[data-tool="field"] .rp-page { cursor: crosshair; touch-action: none; }
+.rp-design { z-index: 2; }
+.rp-design-box { position: absolute; border: 1.5px dashed var(--rp-focus); border-radius: 3px; background: color-mix(in srgb, var(--rp-focus) 8%, transparent); cursor: move; }
+.rp-design-box[data-kind="signature"] { background: color-mix(in srgb, var(--rp-focus) 14%, transparent); }
+.rp-design-box[aria-pressed="true"] { border-style: solid; box-shadow: 0 0 0 2px color-mix(in srgb, var(--rp-focus) 35%, transparent); }
+.rp-design-box > span { position: absolute; left: 0; bottom: 100%; max-width: 220px; padding: 1px 5px; border-radius: 4px 4px 0 0; background: var(--rp-focus); color: var(--rp-accent-text); font: 600 10.5px/1.5 var(--rp-font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+.rp-boxing.rp-boxing-field { background: color-mix(in srgb, var(--rp-focus) 12%, transparent); outline-color: var(--rp-focus); }
 .rp-boxing { position: absolute; z-index: 3; background: rgba(0, 0, 0, 0.75); outline: 2px dashed #e03131; pointer-events: none; }
 .rp-pop-info { max-width: 280px; margin: 0; color: var(--rp-muted); font-size: 12.5px; line-height: 1.45; }
 .rp-root:not([data-tool="select"]):not([data-tool="highlight"]) .textLayer { pointer-events: none; }

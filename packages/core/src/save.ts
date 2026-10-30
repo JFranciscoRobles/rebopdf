@@ -133,6 +133,11 @@ export async function savePdf(pdf: Pdf, options: SaveOptions = {}): Promise<Uint
   // The page tree is written again only when the pages are not those of the file, in its order.
   if (order.length !== own.length || order.some((page, i) => page !== own[i])) setPages(doc, order);
 
+  // The fields made here, in the form of the PDF saved, on the pages they are on now.
+  const made = pdf.fields.filter((field) => field.created && kept(field));
+  if (made.length) createFields(doc, made, (id) => order[pdf.pages.findIndex((page) => page.id === id)]);
+  if (made.length && options.flatten) formOf(doc)?.flatten();
+
   let font: PDFFont | undefined;
   const helvetica = async () => (font ??= await textFont(doc, options.font));
   const redactor = new Redactor(doc);
@@ -187,6 +192,67 @@ function setPages(doc: PDFDocument, order: PDFPage[]) {
   for (const page of order) page.node.setParent(rootRef);
 }
 
+/** Puts fields made here in the form of the document, each on its page. */
+function createFields(doc: PDFDocument, fields: Field[], pageOf: (id: string) => PDFPage | undefined) {
+  const form = formOf(doc) ?? doc.getForm();
+  const tell = (dict: { set(key: PDFName, value: PDFHexString): void }, label?: string) => label && dict.set(PDFName.of('TU'), PDFHexString.fromText(label));
+  for (const field of fields) {
+    const [widget] = field.widgets;
+    const page = widget && pageOf(widget.page);
+    if (!page) continue;
+    const { rect } = widget;
+    // pdf-lib makes a widget as big as its box and half its border more on each side: it is given the box less that.
+    const border = 0.8;
+    const at = { x: rect.x + border / 2, y: rect.y + border / 2, width: rect.width - border, height: rect.height - border, borderWidth: border, borderColor: rgb(0.55, 0.55, 0.55) };
+    if (field.kind === 'signature') {
+      // pdf-lib makes no signature field: it is made as the PDF says one is, a widget of the kind Sig.
+      const { context } = doc;
+      const ref = context.register(
+        context.obj({
+          Type: 'Annot',
+          Subtype: 'Widget',
+          FT: 'Sig',
+          T: PDFHexString.fromText(field.name),
+          Rect: [rect.x, rect.y, rect.x + rect.width, rect.y + rect.height],
+          F: 4,
+          P: page.ref,
+        } as never),
+      );
+      tell(context.lookup(ref) as never, field.label);
+      page.node.addAnnot(ref);
+      form.acroForm.addField(ref);
+      continue;
+    }
+    let made: PDFTextField | PDFCheckBox | PDFDropdown | PDFOptionList;
+    if (field.kind === 'text') {
+      const text = form.createTextField(field.name);
+      if (field.multiline) text.enableMultiline();
+      text.addToPage(page, at);
+      if (field.value) text.setText(String(field.value));
+      made = text;
+    } else if (field.kind === 'checkbox') {
+      const box = form.createCheckBox(field.name);
+      box.addToPage(page, at);
+      if (field.value === true) box.check();
+      made = box;
+    } else if (field.kind === 'choice') {
+      const choice = form.createDropdown(field.name);
+      choice.addOptions(field.options ?? []);
+      choice.addToPage(page, at);
+      if (field.value) choice.select(String(field.value));
+      made = choice;
+    } else if (field.kind === 'list') {
+      const list = form.createOptionList(field.name);
+      list.addOptions(field.options ?? []);
+      list.addToPage(page, at);
+      if ((field.value as string[]).length) list.select(field.value as string[]);
+      made = list;
+    } else continue;
+    if (field.required) made.enableRequired();
+    tell(made.acroField.dict, field.label);
+  }
+}
+
 /** The kinds of fields the engine keeps, and fills. */
 const FILLED = [PDFTextField, PDFCheckBox, PDFRadioGroup, PDFDropdown, PDFOptionList];
 
@@ -208,6 +274,7 @@ function fillForm(doc: PDFDocument, fields: Field[], keep: boolean) {
       }
       continue;
     }
+    if (ours.kind === 'signature') continue;
     const value = ours.value;
     const f = field as unknown as Record<string, (...args: unknown[]) => void>;
     switch (ours.kind) {
