@@ -9,10 +9,13 @@
 // corner, as it is before it is turned; read_pdf says how big each page is.
 
 import {
+  addField,
   addMark,
+  detectFields,
   type Field,
   findField,
   type Mark,
+  type NewField,
   type Match,
   marksOn,
   movePages,
@@ -21,6 +24,7 @@ import {
   PdfError,
   type Rect,
   readText,
+  removeField,
   removeMark,
   removePages,
   rotatePages,
@@ -210,6 +214,82 @@ export const TOOLS: Tool[] = [
         done.push(describeField(next, findField(next, name)!));
       }
       return { text: `Filled:\n${done.join('\n')}`, pdf: next };
+    },
+  },
+  {
+    name: 'add_field',
+    title: 'Add a field to the form',
+    writes: true,
+    description:
+      'Makes a field of the form on a page, in points from its top left: a text field, a checkbox, a list of choices, or a signature field (where the PDF is to be signed). Saved in the form of the PDF.',
+    properties: {
+      page: PAGE,
+      kind: { type: 'string', enum: ['text', 'checkbox', 'choice', 'signature'], description: 'The kind of field.' },
+      name: { type: 'string', description: 'Its name, which fill_fields takes; what it is called for a person too.' },
+      x: X,
+      y: Y,
+      width: { type: 'number', description: 'How wide, in points.' },
+      height: { type: 'number', description: 'How tall, in points.' },
+      options: { type: 'array', items: { type: 'string' }, description: 'For a list of choices: its choices.' },
+      required: { type: 'boolean', description: 'Whether it must be filled.' },
+      multiline: { type: 'boolean', description: 'For a text field: whether it takes several lines.' },
+    },
+    required: ['page', 'kind', 'x', 'y', 'width', 'height'],
+    async run(pdf, args) {
+      const page = pageAt(pdf, args.page);
+      const [width, height] = [Number(args.width), Number(args.height)];
+      if (!(width > 0 && height > 0)) fail('Give it a width and a height greater than 0.');
+      const top = fromTop(page, Number(args.x), Number(args.y));
+      try {
+        const next = addField(pdf, {
+          kind: String(args.kind) as NewField['kind'],
+          page: page.id,
+          rect: { x: top.x, y: top.y - height, width, height },
+          ...(args.name ? { name: String(args.name), label: String(args.name) } : {}),
+          ...(Array.isArray(args.options) ? { options: args.options.map(String) } : {}),
+          required: !!args.required,
+          multiline: !!args.multiline,
+        });
+        const made = next.fields.at(-1)!;
+        return { text: `Made the field ${made.name} (${made.kind}) on page ${numberOf(pdf, page.id)}.`, pdf: next };
+      } catch (error) {
+        return fail(error instanceof PdfError ? error.message : String(error));
+      }
+    },
+  },
+  {
+    name: 'detect_fields',
+    title: 'Find the fields a PDF asks for',
+    writes: true,
+    description:
+      'Finds the fields a PDF with no form asks for in its text: lines of underscores to write on ("Name: ______") are text fields, boxes drawn with a letter ("☐ I agree") are checkboxes, each named by the words beside it. With `make`, makes them, to be filled with fill_fields.',
+    properties: { pages: { ...PAGES, description: `${PAGES.description} All when left out.` }, make: { type: 'boolean', description: 'Makes the fields found.' } },
+    async run(pdf, args) {
+      const found = await detectFields(pdf, args.pages ? pagesOf(pdf, args.pages) : undefined);
+      if (!found.length) return { text: 'No lines to write on or boxes to tick were found.' };
+      const list = found.map((f) => `- ${f.kind} "${f.label ?? ''}" on page ${numberOf(pdf, f.page)}`).join('\n');
+      if (!args.make) return { text: `${found.length} found (make them with make: true):\n${list}` };
+      let next = pdf;
+      for (const field of found) next = addField(next, field);
+      return {
+        text: `Made ${found.length} fields:\n${next.fields
+          .slice(-found.length)
+          .map((f) => describeField(next, f))
+          .join('\n')}`,
+        pdf: next,
+      };
+    },
+  },
+  {
+    name: 'remove_field',
+    title: 'Remove a field',
+    writes: true,
+    description: 'Takes a field out of the form, by its name as list_fields gives it.',
+    properties: { name: { type: 'string', description: 'The name of the field.' } },
+    required: ['name'],
+    async run(pdf, args) {
+      if (!findField(pdf, String(args.name))) fail(`There is no field "${args.name}".`);
+      return { text: `Removed the field ${args.name}.`, pdf: removeField(pdf, String(args.name)) };
     },
   },
   {

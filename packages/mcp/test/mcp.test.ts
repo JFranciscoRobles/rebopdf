@@ -164,6 +164,21 @@ describe('the MCP server', () => {
     expect(text).toContain('Confidentiality');
   });
 
+  it('makes a form: fields placed, and those the text asks for found', async () => {
+    const { dir, call } = await setup();
+    await call('open_pdf', { file: 'contract.pdf' });
+    expect((await call('add_field', { page: 2, kind: 'text', name: 'City', x: 64, y: 500, width: 200, height: 18, required: true })).text).toBe('Made the field City (text) on page 2.');
+    expect((await call('add_field', { page: 2, kind: 'choice', name: 'Size', x: 64, y: 540, width: 100, height: 18 })).text).toBe('A choice needs its options.');
+    expect((await call('add_field', { page: 2, kind: 'signature', name: 'Witness', x: 300, y: 600, width: 180, height: 50 })).text).toMatch(/Witness \(signature\)/);
+    expect((await call('fill_fields', { values: { City: 'Madrid' } })).text).toContain('- City "City" (text, page 2): "Madrid" · required');
+    expect((await call('detect_fields', {})).text).toBe('No lines to write on or boxes to tick were found.');
+    expect((await call('remove_field', { name: 'billing' })).text).toBe('Removed the field billing.');
+    await call('save_pdf', { file: 'form.pdf' });
+    const saved = await openPdf(new Uint8Array(await readFile(join(dir, 'form.pdf'))));
+    expect(saved.fields.map((f) => f.name)).toEqual(expect.arrayContaining(['City', 'Witness']));
+    expect(saved.fields.map((f) => f.name)).not.toContain('billing');
+  });
+
   it('keeps to its folders', async () => {
     const { call } = await setup();
     const outside = await call('open_pdf', { file: '/etc/hosts' });
