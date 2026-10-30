@@ -13,6 +13,7 @@
 
 import { PDFArray, PDFDict, type PDFDocument, PDFHexString, PDFInvalidObject, PDFName, PDFNumber, PDFSignature, PDFString, StandardFonts } from '@cantoo/pdf-lib';
 import type forgeType from 'node-forge';
+import { annotate } from './objects';
 import { formOf, loadDocument } from './open';
 import { type SaveOptions, savePdf } from './save';
 import { type Pdf, PdfError, type Rect, type Signature } from './types';
@@ -179,7 +180,7 @@ export async function signPdf(pdf: Pdf, options: SignOptions): Promise<Uint8Arra
       ...(r.width > 0 ? { AP: { N: await appearance(r) } } : {}),
     } as never) as unknown as PDFDict;
     const ref = context.register(field);
-    page.node.addAnnot(ref);
+    annotate(page, ref);
     form.acroForm.addField(ref);
   }
   field.set(PDFName.of('V'), signature);

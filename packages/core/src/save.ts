@@ -45,7 +45,7 @@ import {
 } from '@cantoo/pdf-lib';
 import { dropAnnotations } from './annotations';
 import { overlaps } from './geometry';
-import { dropUnreachable, OBJECTS_AT_ONCE, writeDocument } from './objects';
+import { annotate, dropUnreachable, mergeWidget, OBJECTS_AT_ONCE, writeDocument } from './objects';
 import { formOf, loadDocument, readField } from './open';
 import { Redactor, unseenOf, writeUnseen } from './redact';
 import { type Color, type Field, type HighlightMark, type InkMark, type Mark, type NoteMark, type Pdf, PdfError, type Point, type Rect, type SignatureMark, type TextMark } from './types';
@@ -231,7 +231,7 @@ function createFields(doc: PDFDocument, fields: Field[], pageOf: (id: string) =>
         } as never),
       );
       tell(context.lookup(ref) as never, field.label);
-      page.node.addAnnot(ref);
+      annotate(page, ref);
       form.acroForm.addField(ref);
       continue;
     }
@@ -262,6 +262,7 @@ function createFields(doc: PDFDocument, fields: Field[], pageOf: (id: string) =>
     } else continue;
     if (field.required) made.enableRequired();
     tell(made.acroField.dict, field.label);
+    mergeWidget(doc, made);
   }
 }
 
@@ -452,7 +453,7 @@ async function putMark(doc: PDFDocument, page: PDFPage, mark: Mark, flatten: boo
     dict.BS = { W: mark.width, S: 'S' };
   }
   const annot = doc.context.obj(dict as never);
-  page.node.addAnnot(doc.context.register(annot));
+  annotate(page, doc.context.register(annot));
 }
 
 /** The font text marks are written in: the one given, with the letters used alone, or Helvetica. */

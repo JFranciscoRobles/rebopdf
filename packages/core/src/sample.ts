@@ -4,6 +4,7 @@
 // Made here with pdf-lib, the same every time.
 
 import { PDFDocument, type PDFFont, PDFHexString, PDFName, PDFNull, type PDFPage, PDFString, StandardFonts, rgb } from '@cantoo/pdf-lib';
+import { mergeWidget } from './objects';
 import { openPdf } from './open';
 import { wrap } from './save';
 import type { Pdf } from './types';
@@ -193,6 +194,9 @@ export async function samplePdfBytes(locale: 'en' | 'es' = 'en'): Promise<Uint8A
   }
   two.drawText(t.contact, { x: MARGIN, y: y - 60, size: 10, font: regular, color: BRAND });
   footer(two, 2);
+
+  // Each field of one widget one object with it, as forms are made.
+  for (const field of form.getFields()) mergeWidget(doc, field);
 
   // Where it leads: the line on the first page to the clause it names, the address of the web, and a table of contents.
   const { context } = doc;

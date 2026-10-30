@@ -1,3 +1,4 @@
+import { PDFDocument, PDFName } from '@cantoo/pdf-lib';
 import forge from 'node-forge';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { addField, addMark, checkSignatures, openPdf, PdfError, samplePdf, savePdf, setField, signPdf } from '../src';
@@ -89,5 +90,19 @@ describe('signing with a certificate', () => {
     await expect(signPdf(pdf, { certificate: ana.certificate, key: luis.key, password: luis.password })).rejects.toThrow(/not the one of the certificate/);
     await expect(signPdf(pdf, {})).rejects.toBeInstanceOf(PdfError);
     expect(await checkSignatures(await savePdf(pdf))).toEqual([]);
+  }, 60_000);
+
+  it('changes after signing only what it must, as readers of signatures allow', async () => {
+    const signed = await signPdf(await samplePdf('en'), { p12: ana.p12, password: ana.password });
+    const contents = async (bytes: Uint8Array) => String((await PDFDocument.load(bytes)).getPage(0).node.get(PDFName.of('Contents')));
+    const opened = await openPdf(signed);
+    const noted = await savePdf(addMark(opened, { kind: 'note', page: opened.pages[0].id, at: { x: 50, y: 50 }, text: 'Seen', color: '#f08c00' }));
+    // A note is put on the page, and what the page draws is left as it was.
+    expect(await contents(noted)).toBe(await contents(signed));
+    // A field of one widget is one object with it: filling it changes that object alone.
+    const doc = await PDFDocument.load(signed);
+    const field = doc.getForm().getField('client.name').acroField.dict;
+    expect(field.has(PDFName.of('Kids'))).toBe(false);
+    expect(field.has(PDFName.of('Rect'))).toBe(true);
   }, 60_000);
 });
