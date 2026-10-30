@@ -3,7 +3,7 @@
 // Spanish, ?noworker reads files in the page. With ?collab=<server>, the
 // menu shares the PDF to work on it together, and &room=<id> joins a room.
 
-import { samplePdf, usePdfAssets, usePdfWorker } from '@rebopdf/core';
+import { samplePdf, setPdfAssets, setPdfWorker } from '@rebopdf/core';
 import { joinRoom, roomAddress, shareEditor } from '@rebopdf/collab';
 import { mountEditor } from '@rebopdf/editor';
 import { recognizeText } from '@rebopdf/ocr';
@@ -20,9 +20,9 @@ const chosen = (next: 'en' | 'es') => {
   params.set('lang', next);
   history.replaceState(null, '', `?${params}`);
 };
-if (!params.has('noworker')) usePdfWorker(worker);
+if (!params.has('noworker')) setPdfWorker(worker);
 // The folder of pdfjs-dist as Vite serves it while it is developed: its fonts, for PDF/A, and its maps.
-if (import.meta.env.DEV) usePdfAssets(liberation.replace(/standard_fonts\/.*$/, ''));
+if (import.meta.env.DEV) setPdfAssets(liberation.replace(/standard_fonts\/.*$/, ''));
 const app = document.querySelector<HTMLElement>('#app')!;
 document.documentElement.lang = locale;
 /** The tab says the PDF open, for who has several. */

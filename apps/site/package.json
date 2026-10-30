@@ -1,6 +1,6 @@
 {
   "name": "@rebopdf/site",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "The landing page of ReboPDF and its developer documentation.",
   "license": "MIT",
   "private": true,

@@ -39,6 +39,6 @@ Una sala tiene tres llaves, y cada dirección lleva una. Quien edita hace todo; 
 
 ## Respuestas e historial
 
-Una nota se responde desde su menú: cada respuesta dice quién y cuándo, y se guarda en el PDF como se guardan las respuestas (anotaciones en respuesta a ella), así otros lectores las muestran debajo. En una sala, Historial de la sala (en el menú ⋯) lista quién hizo qué, y cuándo; en código está en `sesion.history`.
+Una nota se responde desde su menú: cada respuesta dice quién y cuándo, y se guarda en el PDF como se guardan las respuestas (anotaciones en respuesta a ella), así otros lectores las muestran debajo. En una sala, Historial de la sala (en el menú, en Herramientas) lista quién hizo qué, y cuándo; en código está en `sesion.history`.
 
 Las páginas van por su número, así que en una sala no se giran, mueven ni borran. Deshacer quita lo que se hizo aquí, no lo que hicieron otros.

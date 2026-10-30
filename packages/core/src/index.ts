@@ -30,7 +30,7 @@ export {
 } from './edit';
 export { linksOf, type OutlineItem, outlineOf, type PageLink, type Place } from './links';
 export { type OpenOptions, openPdf } from './open';
-export { freshReaderOf, type PdfJsDocument, pdfjs, readerFor, readerOf, usePdfAssets, usePdfWorker } from './pdfjs';
+export { freshReaderOf, type PdfJsDocument, pdfjs, readerFor, readerOf, setPdfAssets, setPdfWorker, usePdfAssets, usePdfWorker } from './pdfjs';
 export { samplePdf, samplePdfBytes } from './sample';
 export { boundsOf, markBounds, NOTE_SIZE, type SaveOptions, savePdf, savesIncrementally, whyNotIncremental } from './save';
 export { overlaps } from './geometry';

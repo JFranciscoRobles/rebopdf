@@ -1,6 +1,6 @@
 {
   "name": "@rebopdf/collab",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "A PDF worked on by several people at once: their marks, notes and what they fill in seen by the others as they make them, with who is on which page. The room server and its client.",
   "license": "MIT",
   "private": true,

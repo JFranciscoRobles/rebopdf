@@ -382,3 +382,14 @@ describe('text', () => {
     expect(Buffer.from(await samplePdfBytes('en')).equals(Buffer.from(await samplePdfBytes('en')))).toBe(true);
   });
 });
+
+describe('where PDF.js finds its worker and its files', () => {
+  it('is given by setPdfWorker and setPdfAssets, and still by the names they had, which linters of hooks took for hooks', async () => {
+    const core = await import('../src');
+    expect(core.usePdfWorker).toBe(core.setPdfWorker);
+    expect(core.usePdfAssets).toBe(core.setPdfAssets);
+    const react = await import('../../react/src');
+    expect(react.setPdfWorker).toBe(core.setPdfWorker);
+    expect(react.setPdfAssets).toBe(core.setPdfAssets);
+  });
+});

@@ -5,7 +5,7 @@
 // window that has none yet, the others each in a window of its own. PDFs
 // dropped on a window with one put their pages in it.
 
-import { openPdf, type Pdf, PdfError, usePdfWorker } from '@rebopdf/core';
+import { openPdf, type Pdf, PdfError, setPdfWorker } from '@rebopdf/core';
 import { type Editor, mountEditor } from '@rebopdf/editor';
 import { recognizeText } from '@rebopdf/ocr';
 import { invoke } from '@tauri-apps/api/core';
@@ -15,7 +15,7 @@ import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { ask, message, open, save } from '@tauri-apps/plugin-dialog';
 import worker from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
 
-usePdfWorker(worker);
+setPdfWorker(worker);
 const win = getCurrentWebviewWindow();
 const IS_MAC = /Mac/.test(navigator.platform);
 const host = document.getElementById('app')!;
@@ -187,7 +187,7 @@ async function buildMenu(): Promise<Menu> {
         await Submenu.new({
           text: 'ReboPDF',
           items: [
-            await PredefinedMenuItem.new({ item: { About: { name: 'ReboPDF', version: '0.2.1' } }, text: say('Acerca de ReboPDF', 'About ReboPDF') }),
+            await PredefinedMenuItem.new({ item: { About: { name: 'ReboPDF', version: '0.2.2' } }, text: say('Acerca de ReboPDF', 'About ReboPDF') }),
             await separator(),
             await PredefinedMenuItem.new({ item: 'Hide', text: say('Ocultar ReboPDF', 'Hide ReboPDF') }),
             await PredefinedMenuItem.new({ item: 'HideOthers', text: say('Ocultar otros', 'Hide Others') }),

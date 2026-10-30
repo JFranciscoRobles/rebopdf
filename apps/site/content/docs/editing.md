@@ -27,7 +27,7 @@ The thumbnails at the side act on the pages chosen (a click; Shift or ⌘ for mo
 
 ## The menu
 
-⋯ opens a PDF, adds the pages of another, prints, downloads (or flattened: fields and marks drawn into the pages), signs digitally, compares with another version, and reads the text of scanned pages when the editor is given `recognize`.
+The menu (☰, the first button of the bar) is a screen of its own: Document opens a PDF, adds the pages of another, downloads and prints; Export downloads it flattened (fields and marks drawn into the pages), smaller, as PDF/A or with a password; Digital signature signs it with a certificate; Tools compares it with another version and reads the text of scanned pages when the editor is given `recognize`; Language and Appearance are there too. The page in view, how the pages fit, the zoom and full screen are at the foot of the pages.
 
 ## Undo
 
@@ -35,7 +35,7 @@ The thumbnails at the side act on the pages chosen (a click; Shift or ⌘ for mo
 
 ## Protected by a password
 
-Download with a password… (in the menu ⋯) encrypts the PDF with AES-256: it opens only with the password, and what it does not allow (printing, copying its text, changing it) readers do not offer. In code:
+Download with a password… (in the menu, under Export) encrypts the PDF with AES-256: it opens only with the password, and what it does not allow (printing, copying its text, changing it) readers do not offer. In code:
 
 ```ts
 const bytes = await savePdf(pdf, { protect: { password: 'abre', permissions: { copying: false } } });
@@ -45,11 +45,11 @@ const bytes = await savePdf(pdf, { protect: { password: 'abre', permissions: { c
 
 ## Smaller
 
-Download smaller (in the menu ⋯) makes the PDF smaller: its pictures no bigger than its pages show them, at 150 dots to the inch; photographs written again as JPEG; and a picture or a font it has twice kept once. Each is changed only when that makes it smaller. In code, `savePdf(pdf, { optimize: { dpi: 150, quality: 0.75 } })`.
+Download smaller (in the menu, under Export) makes the PDF smaller: its pictures no bigger than its pages show them, at 150 dots to the inch; photographs written again as JPEG; and a picture or a font it has twice kept once. Each is changed only when that makes it smaller. In code, `savePdf(pdf, { optimize: { dpi: 150, quality: 0.75 } })`.
 
 ## PDF/A
 
-Download as PDF/A (in the menu ⋯) makes a PDF/A-2B, as archives and many offices ask documents to be kept: every font it draws with carried in it (those it only names taken from the ones PDF.js carries, made to measure as the standard ones: Liberation Sans for Helvetica and Arial, Foxit's for Times, Courier, Symbol and ZapfDingbats), nothing that runs, its colours and its metadata as PDF/A says. In code, `savePdf(pdf, { pdfa: true })` (or `'3B'`; it is 3B by itself when the PDF carries files). In a browser, the fonts are fetched from the folder given to `usePdfAssets`.
+Download as PDF/A (in the menu, under Export) makes a PDF/A-2B, as archives and many offices ask documents to be kept: every font it draws with carried in it (those it only names taken from the ones PDF.js carries, made to measure as the standard ones: Liberation Sans for Helvetica and Arial, Foxit's for Times, Courier, Symbol and ZapfDingbats), nothing that runs, its colours and its metadata as PDF/A says. In code, `savePdf(pdf, { pdfa: true })` (or `'3B'`; it is 3B by itself when the PDF carries files). In a browser, the fonts are fetched from the folder given to `usePdfAssets`.
 
 To be sure an archive takes it, check it with [veraPDF](https://verapdf.org/).
 

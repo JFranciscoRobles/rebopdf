@@ -30,6 +30,6 @@ Todo lo de `@rebopdf/core` crea un `Pdf` nuevo; los archivos de los que se abri√
 
 ## PDF.js
 
-`usePdfWorker`, `usePdfAssets`, `readerOf`, `readerFor`.
+`setPdfWorker`, `setPdfAssets`, `readerOf`, `readerFor`.
 
 Lo que no se puede hacer se avisa con un `PdfError` y su `code`: `encrypted`, `invalid`, `empty`, `not-found`, `incremental`, `certificate`.

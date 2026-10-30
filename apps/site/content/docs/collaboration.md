@@ -39,6 +39,6 @@ A room has three keys, and each address carries one. Who edits does everything; 
 
 ## Replies and history
 
-A note is answered from its menu: each reply says who and when, and is saved in the PDF as replies are (annotations in reply to it), so other readers show them under it. In a room, History of the room (in the menu ⋯) lists who did what, and when; `session.history` has it in code.
+A note is answered from its menu: each reply says who and when, and is saved in the PDF as replies are (annotations in reply to it), so other readers show them under it. In a room, History of the room (in the menu, under Tools) lists who did what, and when; `session.history` has it in code.
 
 Pages go by their number, so in a room pages are not turned, moved or deleted. Undo takes back what was done here, not what others did.

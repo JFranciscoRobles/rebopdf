@@ -46,13 +46,13 @@ Sin `onSave`, el botón descarga el PDF. Sin `pdf`, el editor pide que se abra o
 PDF.js lee los archivos en la página salvo que se le dé un worker propio, que mantiene la página respondiendo mientras lee un archivo grande. Con Vite:
 
 ```ts
-import { usePdfWorker, usePdfAssets } from '@rebopdf/core';
+import { setPdfWorker, setPdfAssets } from '@rebopdf/core';
 import worker from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
 
-usePdfWorker(worker);
+setPdfWorker(worker);
 // Las fuentes que un PDF nombra sin traerlas, y los mapas del texto chino,
 // japonés y coreano: una copia de la carpeta de pdfjs-dist que sirvas.
-usePdfAssets('/pdfjs/');
+setPdfAssets('/pdfjs/');
 ```
 
 ## Probarlo desde el repositorio

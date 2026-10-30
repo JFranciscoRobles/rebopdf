@@ -4,6 +4,23 @@ Every package of ReboPDF is released at the same version. Before 1.0, a
 minor version (0.x.0) may change the API; such changes are listed under
 **Changed** with what to do about them.
 
+## 0.2.2 — 2026-10-30
+
+### Changed
+
+- `setPdfWorker` and `setPdfAssets` (of `@rebopdf/core`, and of
+  `@rebopdf/react`) in place of `usePdfWorker` and `usePdfAssets`: named as
+  React's hooks are, which they are not, the linters of hooks (Biome's
+  `useHookAtTopLevel`, ESLint's `rules-of-hooks`) took them for hooks, and
+  refused them called once, or in a function of the application's. The old
+  names are still there, the same functions, marked deprecated: nothing
+  has to change, but the name.
+
+### Fixed
+
+- The documentation speaks of the menu as it is now (☰, its parts), not of
+  the More menu (⋯).
+
 ## 0.2.1 — 2026-10-30
 
 ### Fixed

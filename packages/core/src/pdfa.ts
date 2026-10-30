@@ -338,7 +338,7 @@ export async function makePdfA(doc: PDFDocument, level?: PdfALevel): Promise<Pdf
     if (!loading) {
       loading = (async () => {
         const bytes = await standardFont(file);
-        if (!bytes) throw new PdfError('invalid', `The font ${file} of PDF.js was not found to put in the PDF: give usePdfAssets the address of the pdfjs-dist folder.`);
+        if (!bytes) throw new PdfError('invalid', `The font ${file} of PDF.js was not found to put in the PDF: give setPdfAssets the address of the pdfjs-dist folder.`);
         const program = type1 ? readCff(bytes) : await readTrueType(bytes);
         // Symbol and Dingbats read their codes as they always have, by names of their own.
         const own = /Symbol/.test(file) ? Encodings.Symbol : /Dingbats/.test(file) ? Encodings.ZapfDingbats : undefined;

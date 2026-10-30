@@ -93,13 +93,13 @@ PDF.js reads files in the page itself unless it is given a worker, which
 keeps the page answering while a big file is read. With Vite:
 
 ```ts
-import { usePdfWorker, usePdfAssets } from '@rebopdf/core';
+import { setPdfWorker, setPdfAssets } from '@rebopdf/core';
 import worker from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
 
-usePdfWorker(worker);
+setPdfWorker(worker);
 // Fonts a PDF names without carrying them, and the maps of Chinese, Japanese
 // and Korean text: a copy of the pdfjs-dist folder the application serves.
-usePdfAssets('/pdfjs/');
+setPdfAssets('/pdfjs/');
 ```
 
 ## Assistants (MCP)

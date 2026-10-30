@@ -1,6 +1,6 @@
 {
   "name": "@rebopdf/editor",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "The PDF worked on in the page: highlights, notes, drawing, text, signatures, forms filled, pages turned, taken out, moved and joined, undone and saved.",
   "license": "MIT",
   "private": true,

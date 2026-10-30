@@ -1,6 +1,6 @@
 // PDF.js, which reads the text of a PDF and draws its pages, loaded once and
 // when it is first needed. In the browser it works in the page itself unless
-// it is given a worker of its own (`usePdfWorker`), which keeps the page
+// it is given a worker of its own (`setPdfWorker`), which keeps the page
 // answering while a big file is read; in Node it works in the process.
 
 type PdfJs = typeof import('pdfjs-dist/legacy/build/pdf.mjs');
@@ -17,7 +17,7 @@ let assets: string | undefined;
  * `standard_fonts/` and `cmaps/`), as "/pdfjs/". Without it, those fonts are
  * taken from the system, and such text may not be drawn.
  */
-export function usePdfAssets(base: string): void {
+export function setPdfAssets(base: string): void {
   assets = base.endsWith('/') ? base : `${base}/`;
 }
 
@@ -27,9 +27,14 @@ export function usePdfAssets(base: string): void {
  * (with Vite, `import url from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'`),
  * or the worker made from it. Called before the first PDF is opened.
  */
-export function usePdfWorker(src: string | Worker): void {
+export function setPdfWorker(src: string | Worker): void {
   worker = src;
 }
+
+/** @deprecated Named as React's hooks are, which it is not, so that linters of hooks take it for one: `setPdfAssets`. */
+export const usePdfAssets = setPdfAssets;
+/** @deprecated Named as React's hooks are, which it is not, so that linters of hooks take it for one: `setPdfWorker`. */
+export const usePdfWorker = setPdfWorker;
 
 export function pdfjs(): Promise<PdfJs> {
   loading ??= (async () => {
@@ -61,7 +66,7 @@ function nodeAssets(): string | undefined {
   }
 }
 
-/** A font PDF.js carries (of its `standard_fonts/`), by its file: from the disk in Node, from the address given to `usePdfAssets` in a browser. */
+/** A font PDF.js carries (of its `standard_fonts/`), by its file: from the disk in Node, from the address given to `setPdfAssets` in a browser. */
 export async function standardFont(file: string): Promise<Uint8Array | undefined> {
   const local = nodeAssets();
   if (local) {

@@ -30,6 +30,6 @@ Everything of `@rebopdf/core` makes a new `Pdf`; the files it was opened from ar
 
 ## PDF.js
 
-`usePdfWorker`, `usePdfAssets`, `readerOf`, `readerFor`.
+`setPdfWorker`, `setPdfAssets`, `readerOf`, `readerFor`.
 
 What cannot be done is said with a `PdfError` and its `code`: `encrypted`, `invalid`, `empty`, `not-found`, `incremental`, `certificate`.

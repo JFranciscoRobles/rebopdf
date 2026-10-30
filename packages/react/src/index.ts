@@ -12,6 +12,8 @@ export {
   savePdf,
   searchPdf,
   setField,
+  setPdfAssets,
+  setPdfWorker,
   usePdfAssets,
   usePdfWorker,
 } from '@rebopdf/core';
