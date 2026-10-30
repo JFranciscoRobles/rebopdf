@@ -93,7 +93,7 @@ describe('the MCP server', () => {
     expect((await call('list_marks')).text.split('\n')).toHaveLength(5);
 
     expect((await call('save_pdf')).text).toMatch(/^Wrote .*contract \(edited\)\.pdf/);
-    const saved = await openPdf(new Uint8Array(await readFile(join(dir, 'contract (edited).pdf'))));
+    const saved = await openPdf(new Uint8Array(await readFile(join(dir, 'contract (edited).pdf'))), { marks: false });
     expect(Object.fromEntries(saved.fields.map((f) => [f.name, f.value]))).toMatchObject({ 'client.name': 'Ana García', plan: 'Business', accept: true, billing: 'Yearly' });
     expect((await pageText(saved, saved.pages[1].id)).text).toContain('Madrid, 29 October 2026');
     const reader = await readerOf(Object.values(saved.sources)[0]);

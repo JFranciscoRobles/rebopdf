@@ -57,6 +57,7 @@ await writeFile('filled.pdf', await savePdf(pdf)); // or { flatten: true }
 - **Search:** without minding capitals or accents ("accion" finds "Acción"), across the end of a line, every place shown, the next and the one before with Enter and Shift+Enter.
 - **Forms:** text, checkboxes, radio buttons, choices and lists, filled in the page and saved as a form.
 - **Marks:** highlights of the text selected (with a comment), notes, drawing by hand, text written on the page (to fill a form with no fields), and signatures, drawn, typed or a picture. Each chosen to move by dragging or by the arrows, to colour, to change and to delete.
+- **Comments made elsewhere:** the highlights, notes and drawings a PDF comes with (from Acrobat, Preview or any reader) are changed and deleted as those made here.
 - **Pages:** turned, deleted, moved by dragging their thumbnails or by Alt and the arrows, taken out as a PDF of their own, blank ones put in, and the pages of other PDFs put in by dropping them on the editor.
 - **Any script:** text is written in Helvetica, with Latin letters; given a font (`font: bytesOfATtf`), in any script it has letters for, the letters used alone put in the PDF.
 - **Big PDFs:** 300 pages and 37 MB open in about a second and are saved in two and a half; the pages are drawn as they come near the view.

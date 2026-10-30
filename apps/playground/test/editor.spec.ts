@@ -355,3 +355,23 @@ test('links lead to their place, and the table of contents to each section', asy
   await page.keyboard.press('d');
   await expect(web).toBeHidden();
 });
+
+test('the notes a PDF comes with are changed and deleted as any other', async ({ page }) => {
+  const { addMark, samplePdf, savePdf } = await import('@rebopdf/core');
+  let pdf = await samplePdf('en');
+  pdf = addMark(pdf, { kind: 'note', page: pdf.pages[0].id, at: { x: 450, y: 760 }, text: 'From Acrobat', color: '#f08c00', author: 'Luis' });
+  const bytes = Buffer.from(await savePdf(pdf));
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'More' }).click();
+  await page.getByRole('menuitem', { name: 'Open a PDF…' }).click();
+  await (await chooser).setFiles({ name: 'Annotated.pdf', mimeType: 'application/pdf', buffer: bytes });
+  const note = page.getByRole('button', { name: 'Note: From Acrobat' });
+  await expect(note).toBeVisible();
+  await note.click();
+  await page.getByRole('textbox', { name: 'What the note says' }).fill('Seen');
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(page.locator('.rp-mark-note')).toHaveCount(0);
+  const { bytes: saved } = await downloaded(page);
+  const reader = await readerOf(saved);
+  expect((await (await reader.getPage(1)).getAnnotations()).filter((a) => a.subtype === 'Text')).toHaveLength(0);
+});

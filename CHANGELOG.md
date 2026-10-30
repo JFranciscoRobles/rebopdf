@@ -68,6 +68,11 @@ minor version (0.x.0) may change the API; such changes are listed under
   opened, drawn and saved, to be opened after with none; those protected
   only from being changed, as many are, open with no password, as every
   reader opens them.
+- **The highlights, notes and ink a PDF comes with are marks**, from
+  Acrobat, Preview or any reader: changed, moved, coloured and deleted as
+  those put on here, by whom and when as the PDF says, and saved again as
+  annotations. Those of other kinds, and those in a thread of replies, stay
+  as they are; `openPdf(bytes, { marks: false })` leaves all as they are.
 - **Links and the table of contents**: the links of a page lead where they
   lead (an address of the web opens apart; a place of the PDF is gone to,
   at its height), and a PDF with an outline has it in a tab beside the

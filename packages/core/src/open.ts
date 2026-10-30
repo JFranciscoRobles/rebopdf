@@ -2,11 +2,9 @@
 // with pdf-lib. The bytes are kept as they came, to be drawn and saved from.
 
 import { PDFCheckBox, PDFDocument, type PDFField, PDFDropdown, PDFHexString, PDFName, PDFOptionList, PDFRadioGroup, type PDFRef, PDFString, PDFTextField } from '@cantoo/pdf-lib';
-import { dropUnreachable } from './objects';
+import { takeMarks } from './annotations';
+import { dropUnreachable, OBJECTS_AT_ONCE, writeDocument } from './objects';
 import { type Field, type Page, type Pdf, PdfError, type Rect } from './types';
-
-/** How many objects pdf-lib reads or writes before it lets the page answer. */
-export const OBJECTS_AT_ONCE = 1500;
 
 let counter = 0;
 /** An id not used before in this run. */
@@ -17,6 +15,12 @@ export interface OpenOptions {
   name?: string;
   /** For a PDF that asks for one to be opened. What is saved of it asks for none. */
   password?: string;
+  /**
+   * Whether the highlights, notes and ink it comes with are taken as marks,
+   * to be changed and deleted. They are, unless false: then they stay in the
+   * pages as they are.
+   */
+  marks?: boolean;
 }
 
 /** The documents that were opened with a password (an empty one, too). */
@@ -59,7 +63,7 @@ async function unlocked(doc: PDFDocument): Promise<Uint8Array> {
   // What pdf-lib read it has read open; what said how it was locked (its dictionary of encryption, its old table of objects) goes.
   doc.context.trailerInfo.Encrypt = undefined;
   dropUnreachable(doc);
-  return doc.save({ objectsPerTick: OBJECTS_AT_ONCE });
+  return writeDocument(doc);
 }
 
 /**
@@ -81,12 +85,19 @@ export function formOf(doc: PDFDocument): ReturnType<PDFDocument['getForm']> | u
 export async function openPdf(bytes: Uint8Array, options: OpenOptions = {}): Promise<Pdf> {
   const source = uid('s');
   // A protected PDF is kept open: its bytes as they read without its protection, for PDF.js to draw and to be saved from.
-  const probe = await loadDocument(bytes, options.password);
-  const locked = unlockedDocs.has(probe);
-  if (locked) bytes = await unlocked(probe);
-  // The document read is read from, unless it was read locked: then from its bytes as they are open.
-  const { pages, fields, info } = await readSource(source, bytes, undefined, locked ? undefined : probe);
-  return { name: options.name ?? (info.title ? `${info.title}.pdf` : 'document.pdf'), sources: { [source]: bytes }, pages, fields, marks: [], info };
+  let doc = await loadDocument(bytes, options.password);
+  if (unlockedDocs.has(doc)) {
+    bytes = await unlocked(doc);
+    doc = await loadDocument(bytes);
+  }
+  const { pages, fields, info } = await readSource(source, bytes, undefined, doc);
+  // The highlights, notes and ink it came with, as marks: taken out of its bytes, so that they are drawn once.
+  const marks = options.marks === false ? [] : takeMarks(doc, pages);
+  if (marks.length) {
+    dropUnreachable(doc);
+    bytes = await writeDocument(doc);
+  }
+  return { name: options.name ?? (info.title ? `${info.title}.pdf` : 'document.pdf'), sources: { [source]: bytes }, pages, fields, marks, info };
 }
 
 /** What a file gives a Pdf: its pages and fields, with ids of the source it is given. */

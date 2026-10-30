@@ -3,6 +3,23 @@
 
 import { PDFArray, PDFDict, type PDFDocument, PDFObject, PDFRef, PDFStream } from '@cantoo/pdf-lib';
 
+/** How many objects pdf-lib reads or writes before it lets the page answer. */
+export const OBJECTS_AT_ONCE = 1500;
+
+/** How many objects a PDF has at most to be written with them packed in streams. */
+const PACKED_AT_MOST = 4000;
+
+/**
+ * The bytes of a document. Objects packed in streams make a smaller file, but
+ * pdf-lib packs them in a time that grows with the square of how many there
+ * are: a big PDF is written without them, a hundred times faster and a sixth
+ * bigger.
+ */
+export function writeDocument(doc: PDFDocument): Promise<Uint8Array> {
+  const many = doc.context.enumerateIndirectObjects().length > PACKED_AT_MOST;
+  return doc.save({ objectsPerTick: OBJECTS_AT_ONCE, useObjectStreams: !many });
+}
+
 /**
  * Takes out of the file what nothing in it reaches any more: the pages taken
  * out, which would otherwise still be in its bytes, and what only they used.

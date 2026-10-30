@@ -11,6 +11,7 @@ import {
   movePages,
   openPdf,
   type Pdf,
+  type Rect,
   PdfError,
   pageSize,
   pageText,
@@ -26,7 +27,7 @@ import {
   updateMark,
 } from '../src';
 
-const reopen = async (pdf: Pdf, flatten = false) => openPdf(await savePdf(pdf, { flatten }));
+const reopen = async (pdf: Pdf, flatten = false, marks = true) => openPdf(await savePdf(pdf, { flatten }), { marks });
 const annotations = async (pdf: Pdf) => {
   const reader = await readerOf(Object.values(pdf.sources)[0]);
   const out: string[][] = [];
@@ -218,7 +219,8 @@ describe('marks', () => {
       ],
       color: '#0b1f4d',
     });
-    const back = await reopen(pdf);
+    // Read as they are, not as marks.
+    const back = await reopen(pdf, false, false);
     expect(await annotations(back)).toEqual([['Highlight', 'Text', 'Ink'], []]);
     const reader = await readerOf(Object.values(back.sources)[0]);
     const notes = await (await reader.getPage(1)).getAnnotations();
@@ -226,8 +228,65 @@ describe('marks', () => {
     expect(notes.find((a) => a.subtype === 'Highlight')?.contentsObj?.str).toBe('Check the name');
     expect((await pageText(back, back.pages[1].id)).text).toContain('Madrid, 29 de octubre');
 
-    const flat = await reopen(pdf, true);
+    const flat = await reopen(pdf, true, false);
     expect(await annotations(flat)).toEqual([[], []]);
+  });
+
+  it('a PDF comes with are marks: changed, deleted, and saved again', async () => {
+    let pdf = await samplePdf('en');
+    const [one] = pdf.pages.map((p) => p.id);
+    pdf = addMark(pdf, { kind: 'highlight', page: one, rects: [{ x: 64, y: 700, width: 100, height: 12 }], color: '#a5d8ff', comment: 'Look', author: 'Ana', date: '2026-10-29T10:00:00.000Z' });
+    pdf = addMark(pdf, { kind: 'note', page: one, at: { x: 500, y: 700 }, text: 'Hola', color: '#2f9e44' });
+    pdf = addMark(pdf, {
+      kind: 'ink',
+      page: one,
+      paths: [
+        [
+          { x: 100, y: 100 },
+          { x: 200, y: 150 },
+        ],
+      ],
+      color: '#e03131',
+      width: 3,
+    });
+    const back = await reopen(pdf);
+    expect(back.marks.map((m) => m.kind)).toEqual(['highlight', 'note', 'ink']);
+    const [highlight, note, ink] = back.marks;
+    expect(highlight).toMatchObject({ page: back.pages[0].id, color: '#a5d8ff', comment: 'Look', author: 'Ana', date: '2026-10-29T10:00:00.000Z' });
+    expect((highlight as { rects: Rect[] }).rects[0]).toEqual({ x: 64, y: 700, width: 100, height: 12 });
+    expect(note).toMatchObject({ at: { x: 500, y: 700 }, text: 'Hola', color: '#2f9e44' });
+    expect(ink).toMatchObject({
+      color: '#e03131',
+      width: 3,
+      paths: [
+        [
+          { x: 100, y: 100 },
+          { x: 200, y: 150 },
+        ],
+      ],
+    });
+    // Taken out of the bytes: drawn once, by the viewer.
+    expect(await annotations(back)).toEqual([[], []]);
+    // Deleted, they are gone from what is saved.
+    const again = await reopen(removeMark(back, note.id));
+    expect(again.marks.map((m) => m.kind)).toEqual(['highlight', 'ink']);
+    // Kept as they are when asked.
+    expect((await reopen(pdf, false, false)).marks).toEqual([]);
+  });
+
+  it('of other kinds, and those in a thread of replies, stay as they are', async () => {
+    const { PDFDocument, PDFString } = await import('@cantoo/pdf-lib');
+    const doc = await PDFDocument.load(await samplePdfBytes('en'));
+    const page = doc.getPage(0);
+    const { context } = doc;
+    const note = context.register(context.obj({ Type: 'Annot', Subtype: 'Text', Rect: [100, 100, 120, 120], Contents: PDFString.of('Question') }));
+    const reply = context.register(context.obj({ Type: 'Annot', Subtype: 'Text', Rect: [100, 100, 120, 120], Contents: PDFString.of('Answer'), IRT: note }));
+    const square = context.register(context.obj({ Type: 'Annot', Subtype: 'Square', Rect: [200, 200, 260, 240] }));
+    const alone = context.register(context.obj({ Type: 'Annot', Subtype: 'Text', Rect: [300, 300, 320, 320], Contents: PDFString.of('Alone') }));
+    for (const ref of [note, reply, square, alone]) page.node.addAnnot(ref);
+    const pdf = await openPdf(await doc.save());
+    expect(pdf.marks.map((m) => (m as { text?: string }).text)).toEqual(['Alone']);
+    expect((await annotations(pdf))[0].sort()).toEqual(['Square', 'Text', 'Text']);
   });
 
   it('are changed and taken off, and leave with their page', async () => {

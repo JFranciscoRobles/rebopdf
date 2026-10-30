@@ -138,7 +138,7 @@ const describeMark = (pdf: Pdf, mark: Mark) => {
           : mark.kind === 'ink'
             ? `drawing of ${mark.paths.length} lines`
             : 'signature';
-  return `- ${mark.id} (page ${numberOf(pdf, mark.page)}): ${what}`;
+  return `- ${mark.id} (page ${numberOf(pdf, mark.page)}${mark.author ? `, by ${mark.author}` : ''}): ${what}`;
 };
 
 export const TOOLS: Tool[] = [
@@ -156,7 +156,7 @@ export const TOOLS: Tool[] = [
         const { width, height } = page.box;
         return `## Page ${numberOf(pdf, page.id)} (${round(width)} × ${round(height)} pt${page.rotation ? `, turned ${page.rotation}°` : ''})\n\n${t.text || '(no text: it may be a scanned image)'}`;
       });
-      return { text: `${pdf.name}: ${pdf.pages.length} pages, ${pdf.fields.length} form fields, ${pdf.marks.length} marks added.\n\n${out.join('\n\n')}` };
+      return { text: `${pdf.name}: ${pdf.pages.length} pages, ${pdf.fields.length} form fields, ${pdf.marks.length} marks (see list_marks).\n\n${out.join('\n\n')}` };
     },
   },
   {
@@ -346,20 +346,21 @@ export const TOOLS: Tool[] = [
   },
   {
     name: 'list_marks',
-    title: 'List the marks added',
+    title: 'List the marks',
     writes: false,
-    description: 'Gives what has been put on the PDF since it was opened (highlights, notes, text, drawings, signatures), with their ids, to take one off with remove_mark.',
+    description:
+      'Gives the marks on the PDF, with their ids, to take one off with remove_mark: the highlights, notes and drawings it came with (by whom, when the PDF says), and what has been put on it since (highlights, notes, text, drawings, signatures).',
     properties: { page: { ...PAGE, description: 'Only those on this page.' } },
     async run(pdf, args) {
       const marks = args.page === undefined ? pdf.marks : marksOn(pdf, pageAt(pdf, args.page).id);
-      return { text: marks.length ? marks.map((m) => describeMark(pdf, m)).join('\n') : 'No marks have been added.' };
+      return { text: marks.length ? marks.map((m) => describeMark(pdf, m)).join('\n') : 'There are no marks.' };
     },
   },
   {
     name: 'remove_mark',
     title: 'Remove a mark',
     writes: true,
-    description: 'Takes off a mark added since the PDF was opened, by its id as list_marks gives it.',
+    description: 'Takes off a mark, by its id as list_marks gives it: one the PDF came with, or one put on since.',
     properties: { id: { type: 'string', description: 'The id of the mark.' } },
     required: ['id'],
     async run(pdf, args) {
