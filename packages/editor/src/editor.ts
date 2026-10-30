@@ -1364,8 +1364,11 @@ export class Editor {
     const outside = (event: PointerEvent) => {
       if (!pop.contains(event.target as Node) && !(event.target as Element).closest?.('[data-mark], [aria-haspopup]')) this.closePop();
     };
-    setTimeout(() => this.doc.addEventListener('pointerdown', outside, true), 0);
+    // Heard from the next turn, not to take the click that opened it; and not at all once it is closed by then.
+    let open = true;
+    setTimeout(() => open && this.doc.addEventListener('pointerdown', outside, true), 0);
     this.popClose = () => {
+      open = false;
       this.doc.removeEventListener('pointerdown', outside, true);
       pop.remove();
     };

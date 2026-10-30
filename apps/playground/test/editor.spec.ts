@@ -26,6 +26,8 @@ async function downloaded(page: Page, menu = false) {
 }
 
 const pageEl = (page: Page, n: number) => page.locator('.rp-page').nth(n - 1);
+/** What the editor last told, read even once it is hidden again: under load, a check may come after it hides. */
+const toast = (page: Page) => page.locator('.rp-toast');
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
@@ -171,7 +173,7 @@ test('pages are turned, moved, deleted and taken out, and the undo brings them b
 
   await page.getByRole('button', { name: 'Delete pages' }).click();
   await expect(thumbs).toHaveCount(1);
-  await expect(page.getByRole('status')).toHaveText('Deleted 1 pages');
+  await expect(toast(page)).toHaveText('Deleted 1 pages');
   await page.getByRole('button', { name: 'Undo' }).click();
   await expect(thumbs).toHaveCount(2);
 
@@ -185,13 +187,13 @@ test('the pages of another PDF are added after the page in view', async ({ page 
   await page.getByRole('menuitem', { name: 'Add pages from a PDF…' }).click();
   await (await chooser).setFiles({ name: 'Contrato.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await samplePdfBytes('es')) });
   await expect(page.locator('.rp-thumb')).toHaveCount(4);
-  await expect(page.getByRole('status')).toHaveText('Added 2 pages from Contrato.pdf');
+  await expect(toast(page)).toHaveText('Added 2 pages from Contrato.pdf');
   await expect(page.getByRole('textbox', { name: 'Page number' })).toBeVisible();
   const chooser2 = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: 'More' }).click();
   await page.getByRole('menuitem', { name: 'Add pages from a PDF…' }).click();
   await (await chooser2).setFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello') });
-  await expect(page.getByRole('status')).toHaveText('notes.txt is not a PDF that can be opened.');
+  await expect(toast(page)).toHaveText('notes.txt is not a PDF that can be opened.');
 });
 
 test('text is found, every place it is shown, the next and the one before', async ({ page }) => {
@@ -394,7 +396,7 @@ test('a mark is copied, pasted, duplicated, and a signature put on every page', 
   // Initials on every page, from the menu of the mark.
   await pageEl(page, 2).locator('.rp-mark-text').click();
   await page.getByRole('button', { name: 'On every page' }).click();
-  await expect(page.getByRole('status')).toHaveText('On all 2 pages');
+  await expect(toast(page)).toHaveText('On all 2 pages');
   await expect(pageEl(page, 1).locator('.rp-mark-text')).toHaveCount(3);
   await page.keyboard.press('ControlOrMeta+z');
   await expect(pageEl(page, 1).locator('.rp-mark-text')).toHaveCount(2);
@@ -440,7 +442,7 @@ test('text blacked out, by a box and by a selection, is gone from the PDF saved 
   expect(text).not.toContain('Service agreement');
   expect(text).not.toContain('This agreement is');
   expect(text).toContain('The client');
-  await expect(page.getByRole('status')).toHaveText(/Saved with 2 parts blacked out for good/);
+  await expect(toast(page)).toHaveText(/Saved with 2 parts blacked out for good/);
   // What is shown is the PDF saved: no box is left to undo, and the text under them is not there to select.
   await expect(pageEl(page, 1).locator('.rp-mark-redaction')).toHaveCount(0);
   await expect(pageEl(page, 1).locator('.textLayer span', { hasText: 'Service agreement' })).toHaveCount(0);
@@ -459,13 +461,13 @@ test('a signed PDF is saved after its signature, its bytes as they came', async 
   await page.getByRole('button', { name: 'More' }).click();
   await page.getByRole('menuitem', { name: 'Open a PDF…' }).click();
   await (await chooser).setFiles({ name: 'Signed.pdf', mimeType: 'application/pdf', buffer: original });
-  await expect(page.getByRole('status')).toHaveText('Signed by Ana García. What you change is added after the signature, which still holds.');
+  await expect(toast(page)).toHaveText('Signed by Ana García. What you change is added after the signature, which still holds.');
   await page.getByRole('textbox', { name: 'Full name' }).fill('Luis');
   const { bytes, pdf } = await downloaded(page);
   expect(Buffer.from(bytes.subarray(0, original.length)).equals(original)).toBe(true);
   expect(pdf.fields.find((f) => f.name === 'client.name')?.value).toBe('Luis');
   expect(pdf.signatures).toHaveLength(1);
-  await expect(page.getByRole('status')).toHaveText('Saved after the signature: it still holds.');
+  await expect(toast(page)).toHaveText('Saved after the signature: it still holds.');
 });
 
 test('a form is made: fields drawn, named, found by themselves, moved and signed', async ({ page }) => {
@@ -527,7 +529,7 @@ test('the fields a PDF with no form asks for are found and made at once', async 
   await page.keyboard.press('f');
   await page.getByRole('button', { name: /Kind of field/ }).click();
   await page.getByRole('menuitem', { name: 'Find the fields' }).click();
-  await expect(page.getByRole('status')).toHaveText('Found 2 fields: lines to write on and boxes to tick');
+  await expect(toast(page)).toHaveText('Found 2 fields: lines to write on and boxes to tick');
   await page.keyboard.press('v');
   await page.getByRole('textbox', { name: 'Name' }).fill('Ana');
   await page.getByRole('textbox', { name: 'Phone' }).fill('555 0100');
@@ -569,7 +571,7 @@ test('a PDF is signed digitally with a certificate, in its signature field, and 
   const bytes = new Uint8Array(Buffer.concat(await (await file.createReadStream()).toArray()));
   const { checkSignatures } = await import('@rebopdf/core');
   expect(await checkSignatures(bytes)).toMatchObject([{ field: 'Signature_field', signer: 'Luis Pérez', reason: 'Witness', intact: true, whole: true }]);
-  await expect(page.getByRole('status')).toHaveText(/Signed by Luis Pérez: what was signed is as it was signed\.|Signed digitally by Luis Pérez\./);
+  await expect(toast(page)).toHaveText(/Signed by Luis Pérez: what was signed is as it was signed\.|Signed digitally by Luis Pérez\./);
 });
 
 test('a PDF is compared with another version of it, side by side', async ({ page }) => {
@@ -614,7 +616,7 @@ test('the text of a scanned page is recognized, found and selected', async ({ pa
   await expect(page.locator('.rp-title')).toHaveText('Scan');
   await page.getByRole('button', { name: 'More' }).click();
   await page.getByRole('menuitem', { name: /Recognize text/ }).click();
-  await expect(page.getByRole('status')).toHaveText(/Read the text of 1 pages/, { timeout: 100_000 });
+  await expect(toast(page)).toHaveText(/Read the text of 1 pages/, { timeout: 100_000 });
   await expect(pageEl(page, 1).locator('.rp-recognized span', { hasText: 'agreement' }).first()).toBeAttached();
   await page.locator('.rp-scroll').focus();
   await page.keyboard.press('ControlOrMeta+f');
@@ -633,7 +635,7 @@ test('two people work on a PDF at once: what one does, the other sees', async ({
     await expect(pageEl(ana, 1).locator('canvas')).toHaveCount(1);
     await ana.getByRole('button', { name: 'More' }).click();
     await ana.getByRole('menuitem', { name: /Work on it with others/ }).click();
-    await expect(ana.getByRole('status')).toHaveText(/Link copied/);
+    await expect(toast(ana)).toHaveText(/Link copied/);
     const link = await ana.evaluate(() => (window as unknown as { link: string }).link);
     // Pages are the same for everyone in a room: they are not turned or deleted.
     await expect(ana.getByRole('button', { name: 'Delete pages' })).toBeHidden();
