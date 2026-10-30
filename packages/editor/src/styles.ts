@@ -61,6 +61,8 @@ const CSS = `
 
 .rp-compare-layer { position: absolute; inset: 0; z-index: 45; display: flex; flex-direction: column; background: var(--rp-canvas); }
 .rp-compare-layer > .rp-root { flex: 1; min-height: 0; }
+.rp-peers { display: flex; align-items: center; margin-right: 4px; }
+.rp-peer { display: grid; place-items: center; width: 26px; height: 26px; margin-left: -6px; border: 2px solid var(--rp-chrome); border-radius: 50%; color: #fff; font: 700 11px var(--rp-font); }
 .rp-dialog-back { position: absolute; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: var(--rp-overlay); }
 .rp-dialog { display: flex; flex-direction: column; gap: 14px; width: min(520px, 100%); padding: 18px; border-radius: 14px; background: var(--rp-raised); color: var(--rp-text); box-shadow: var(--rp-shadow); }
 .rp-dialog h2 { margin: 0; font-size: 16px; }

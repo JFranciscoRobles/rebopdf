@@ -65,6 +65,7 @@ await writeFile('filled.pdf', await savePdf(pdf)); // or { flatten: true }
 - **The keyboard:** every tool by a key, Enter to put a note, a text or a signature in the middle of the view, the thumbnails moved by Alt and the arrows.
 - **One history:** ⌘Z and ⇧⌘Z through every change, fields typed in included.
 - **Blacking out, for good:** boxes drawn, or text selected, are blacked out when the PDF is saved, and what was under them (text, pictures, what fields hold) is taken out of the file, not only covered. Pages with boxes are saved as pictures with the boxes burnt in, their other text kept unseen over them, to be found and selected.
+- **Together:** several people on one PDF at once (`@rebopdf/collab`), their marks, notes and what they fill in seen by the others as they make them, and who is on which page.
 - **Scanned pages:** their text recognized with Tesseract (`@rebopdf/ocr`), then found, selected and blacked out as any text, and saved unseen over the pages.
 - **Versions compared:** another version of the PDF side by side, what was taken out in red and what was put in in green, word by word, and what its form holds that changed.
 - **Digital signatures:** a PDF signed with your certificate (a .p12 or .pfx, or a .cer and its .key, as e.firma comes), in a signature field or not seen, as Acrobat checks signatures; and the signatures of a PDF checked: intact, by whom, and whether it was added to after. The certificate stays in the browser.
@@ -79,6 +80,7 @@ await writeFile('filled.pdf', await savePdf(pdf)); // or { flatten: true }
 | `@rebopdf/viewer` | The viewer, with no framework: the pages, thumbnails, zoom, search, the text to select, and the fields and marks over them. |
 | `@rebopdf/editor` | The editor, with no framework: the viewer with tools, the thumbnails to act on, files opened and dropped, the history and saving. |
 | `@rebopdf/ocr` | The text of scanned pages recognized with [Tesseract](https://tesseract.projectnaptha.com/), for the engine, the editor and the MCP server. |
+| `@rebopdf/collab` | A PDF worked on by several people at once: the room server (`rebopdf-collab`) and its client (`shareEditor`, `joinRoom`). |
 | `@rebopdf/react` | `PdfViewer`, `PdfEditor` and `usePdf`. |
 | `@rebopdf/mcp` | An MCP server (`rebopdf-mcp`) so that Claude and other assistants read, search, fill, mark, sign and put in order PDF files. |
 | `@rebopdf/playground` | Where everything is tried: `npm run dev` · :5300 |

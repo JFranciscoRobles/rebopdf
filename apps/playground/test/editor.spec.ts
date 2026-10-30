@@ -621,3 +621,44 @@ test('the text of a scanned page is recognized, found and selected', async ({ pa
   await page.getByRole('searchbox', { name: 'Search' }).fill('website');
   await expect(page.locator('.rp-find-count')).toHaveText(/1 of \d/);
 });
+
+test('two people work on a PDF at once: what one does, the other sees', async ({ browser }) => {
+  const { createCollabServer } = await import('@rebopdf/collab/server');
+  const server = createCollabServer({ port: 0 });
+  await server.ready;
+  const collab = `http://127.0.0.1:${server.port}`;
+  try {
+    const ana = await browser.newPage();
+    await ana.goto(`/?collab=${encodeURIComponent(collab)}&name=Ana`);
+    await expect(pageEl(ana, 1).locator('canvas')).toHaveCount(1);
+    await ana.getByRole('button', { name: 'More' }).click();
+    await ana.getByRole('menuitem', { name: /Work on it with others/ }).click();
+    await expect(ana.getByRole('status')).toHaveText(/Link copied/);
+    const link = await ana.evaluate(() => (window as unknown as { link: string }).link);
+    // Pages are the same for everyone in a room: they are not turned or deleted.
+    await expect(ana.getByRole('button', { name: 'Delete pages' })).toBeHidden();
+
+    const luis = await browser.newPage();
+    await luis.goto(`${link}&name=Luis`);
+    await expect(pageEl(luis, 1).locator('canvas')).toHaveCount(1);
+    await expect(ana.getByRole('listitem', { name: /Luis/ })).toBeVisible();
+
+    // Luis writes a note and fills a field.
+    const box = (await pageEl(luis, 1).boundingBox())!;
+    await luis.locator('.rp-scroll').focus();
+    await luis.keyboard.press('n');
+    await luis.mouse.click(box.x + box.width - 80, box.y + 140);
+    await luis.getByRole('textbox', { name: 'What the note says' }).fill('From Luis');
+    await luis.getByRole('button', { name: 'Add' }).click();
+    await luis.getByRole('textbox', { name: 'Full name' }).fill('Luis Pérez');
+    await expect(ana.getByRole('button', { name: 'Note: From Luis' })).toBeVisible();
+    await expect(ana.getByRole('textbox', { name: 'Full name' })).toHaveValue('Luis Pérez');
+
+    // Ana takes it off; Luis sees it go.
+    await ana.getByRole('button', { name: 'Note: From Luis' }).click();
+    await ana.getByRole('button', { name: 'Delete', exact: true }).click();
+    await expect(luis.getByRole('button', { name: 'Note: From Luis' })).toHaveCount(0);
+  } finally {
+    server.close();
+  }
+});

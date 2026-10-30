@@ -75,6 +75,16 @@ The first version to go to npm: 0.1.0 never went, and what it has is here.
   found, selected, highlighted and blacked out as text is, and written
   unseen over the pages when the PDF is saved. A big title beside a dark
   band of a scan Tesseract may not read.
+- **Working on a PDF together** (`@rebopdf/collab`: `shareEditor`,
+  `joinRoom`, the room server `rebopdf-collab`, `npm run collab`): the
+  marks, notes and what is filled in of each person seen by the others as
+  they make them, and who is in the room and on which page. A room keeps
+  the file and what was done on it, given to whoever comes in. Pages go by
+  their number and fields by their name, so in a room pages are not turned,
+  moved or deleted; undo takes back what was done here, not what others
+  did (`subscribe`, `applyRemote`, `setPeers`, `lockPages` of the editor).
+- The editor takes items of the application's own in its menu (`menu`),
+  and says what they did (`notify`).
 - Saved by adding to the file, only what changed is written: the fields
   that hold what they held, and what the file says of itself, stay as they
   were.

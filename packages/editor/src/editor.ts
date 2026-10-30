@@ -71,6 +71,8 @@ export interface EditorOptions {
    * offer Recognize text in the menu. Without it, the menu has it not.
    */
   recognize?: (pdf: Pdf, options: { onProgress?: (done: number, total: number) => void; languages?: string[] }) => Promise<Pdf>;
+  /** Items of the application's own in the menu of the editor, after its own. */
+  menu?: { icon: IconName; label: string; hint?: string; run: () => void }[];
   /** Given the bytes of the PDF when Save is pressed. Without it, the button downloads the PDF. */
   onSave?: (bytes: Uint8Array, pdf: Pdf) => void | Promise<void>;
 }
@@ -183,6 +185,9 @@ export class Editor {
       onChange: (next) => this.commit(next, 'fields', false),
       decorateThumb: (li, page) => this.decorateThumb(li, page),
       decoratePage: (view) => this.design(view),
+      onPage: (id) => {
+        for (const listener of this.pageListeners) listener(id);
+      },
       onSign: (field, rect) => void this.signField(field, rect),
     });
     this.viewer = viewer;
@@ -406,6 +411,7 @@ export class Editor {
     if (this.chosen && !next.marks.some((m) => m.id === this.chosen)) this.choose('');
     this.refresh();
     this.options.onChange?.(next);
+    this.tell(next, false);
   }
 
   undo(): void {
@@ -430,6 +436,78 @@ export class Editor {
     this.closePop();
     this.refresh();
     this.options.onChange?.(pdf);
+    this.tell(pdf, false);
+  }
+
+  private listeners = new Set<(pdf: Pdf, remote: boolean) => void>();
+  private pageListeners = new Set<(page: string) => void>();
+  private pagesLocked = false;
+  private peersEl?: HTMLElement;
+
+  private tell(pdf: Pdf, remote: boolean) {
+    for (const listener of this.listeners) listener(pdf, remote);
+  }
+
+  /** Told the PDF after every change: whether it came from elsewhere (`applyRemote`) or from here. */
+  subscribe(listener: (pdf: Pdf, remote: boolean) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  /** Told the page in view, as it changes. */
+  onPage(listener: (page: string) => void): () => void {
+    this.pageListeners.add(listener);
+    return () => this.pageListeners.delete(listener);
+  }
+
+  /**
+   * Makes a change that came from elsewhere (another person in a room):
+   * shown, and made on the history too, so that undo takes back what was
+   * done here and not what others did.
+   */
+  applyRemote(change: (pdf: Pdf) => Pdf): void {
+    if (!this.current) return;
+    this.current = change(this.current);
+    this.past = this.past.map(change);
+    this.future = this.future.map(change);
+    this.viewer?.setPdf(this.current);
+    if (this.chosen && !this.current.marks.some((m) => m.id === this.chosen)) this.choose('');
+    this.refresh();
+    this.options.onChange?.(this.current);
+    this.tell(this.current, true);
+  }
+
+  /** Shows who else is working on the PDF, and on which page (by id). */
+  setPeers(peers: { name: string; color: string; page?: string }[]): void {
+    if (!this.viewer) return;
+    if (!this.peersEl) {
+      this.peersEl = this.doc.createElement('div');
+      this.peersEl.className = 'rp-peers';
+      this.peersEl.setAttribute('role', 'list');
+      this.peersEl.setAttribute('aria-label', this.t.people);
+      this.viewer.slots.end.prepend(this.peersEl);
+    }
+    this.peersEl.replaceChildren(
+      ...peers.map((peer) => {
+        const el = this.doc.createElement('span');
+        el.className = 'rp-peer';
+        el.setAttribute('role', 'listitem');
+        el.style.background = peer.color;
+        el.textContent = peer.name.trim().slice(0, 1).toUpperCase() || '?';
+        const n = peer.page && this.current ? pageNumber(this.current, peer.page) : 0;
+        const label = n ? fill(this.t.personOnPage, { name: peer.name, n }) : peer.name;
+        el.title = label;
+        el.setAttribute('aria-label', label);
+        return el;
+      }),
+    );
+  }
+
+  /** Whether pages can be turned, moved, deleted and put in: in a room they cannot, so that they are the same for everyone. */
+  lockPages(locked: boolean): void {
+    this.pagesLocked = locked;
+    if (this.viewer) this.viewer.slots.side.hidden = locked;
+    for (const li of this.viewer?.root.querySelectorAll<HTMLElement>('.rp-thumb') ?? []) li.draggable = !locked;
   }
 
   /** Puts the state of the editor on its controls: history, tool, colour, what is chosen. */
@@ -1366,6 +1444,7 @@ export class Editor {
       item('signature', t.signDigitally, t.signDigitallyHint, () => void this.signDigitally()),
       ...(this.options.files !== false ? [item('layers', t.compareWith, t.compareHint, () => void this.compareWith())] : []),
       ...(this.options.recognize ? [item('text', t.recognize, t.recognizeHint, () => void this.recognizeText())] : []),
+      ...(this.options.menu ?? []).map((own) => item(own.icon, own.label, own.hint ?? '', own.run)),
     ];
     this.openPop(anchor.getBoundingClientRect(), items);
     this.pop?.classList.add('rp-menu');
@@ -1429,11 +1508,13 @@ export class Editor {
   }
 
   private turnPages(by: number) {
+    if (this.pagesLocked) return;
     const ids = this.targetPages();
     if (ids.length && this.current) this.commit(rotatePages(this.current, ids, by));
   }
 
   private deletePages() {
+    if (this.pagesLocked) return;
     const ids = this.targetPages();
     if (!ids.length || !this.current) return;
     try {
@@ -1448,6 +1529,7 @@ export class Editor {
 
   /** A blank page after the page in view, as big as it. */
   private async blankPage() {
+    if (this.pagesLocked) return;
     if (!this.current) return;
     const at = this.viewer?.page ? pageNumber(this.current, this.viewer.page) : this.current.pages.length;
     const next = await insertBlankPage(this.current, at);
@@ -1495,7 +1577,7 @@ export class Editor {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
         li.click();
-      } else if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && event.altKey) {
+      } else if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && event.altKey && !this.pagesLocked) {
         event.preventDefault();
         const to = event.key === 'ArrowDown' ? at + 2 : at - 1;
         if (to < 0 || to > pages.length) return;
@@ -1506,7 +1588,7 @@ export class Editor {
         event.preventDefault();
         const next = pages[at + (event.key === 'ArrowDown' ? 1 : -1)];
         if (next) this.viewer?.thumbFor(next.id)?.focus();
-      } else if (event.key === 'Delete' || event.key === 'Backspace') {
+      } else if ((event.key === 'Delete' || event.key === 'Backspace') && !this.pagesLocked) {
         event.preventDefault();
         if (!this.chosenPages.size) this.chosenPages.add(id);
         this.deletePages();
@@ -1738,6 +1820,11 @@ export class Editor {
       event.preventDefault();
       void this.setTool(tool.tool);
     }
+  }
+
+  /** Says something to the person, as the editor says what it did. */
+  notify(text: string): void {
+    this.toast(text);
   }
 
   private toast(text: string) {

@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@rebopdf/collab": "*",
     "@rebopdf/core": "*",
     "@rebopdf/editor": "*",
     "@rebopdf/ocr": "*",

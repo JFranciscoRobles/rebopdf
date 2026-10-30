@@ -21,8 +21,9 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "build:packages": "npm run build -w @rebopdf/core -w @rebopdf/viewer -w @rebopdf/editor -w @rebopdf/ocr -w @rebopdf/react -w @rebopdf/mcp",
-    "release": "npm run build:packages && node tools/release.mjs"
+    "build:packages": "npm run build -w @rebopdf/core -w @rebopdf/viewer -w @rebopdf/editor -w @rebopdf/ocr -w @rebopdf/collab -w @rebopdf/react -w @rebopdf/mcp",
+    "release": "npm run build:packages && node tools/release.mjs",
+    "collab": "vite-node packages/collab/src/main.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
