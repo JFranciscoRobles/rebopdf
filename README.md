@@ -148,4 +148,3 @@ npm run lint
 
 MIT. PDF.js is Apache-2.0 and pdf-lib MIT; both are dependencies, installed
 from npm.
-# rebopdf
