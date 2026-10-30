@@ -534,3 +534,40 @@ test('the fields a PDF with no form asks for are found and made at once', async 
   const { pdf } = await downloaded(page);
   expect(Object.fromEntries(pdf.fields.map((f) => [f.name, f.value]))).toEqual({ Name: 'Ana', Phone: '555 0100' });
 });
+
+test('a PDF is signed digitally with a certificate, in its signature field, and its signature checks', async ({ page }) => {
+  const forge = (await import('node-forge')).default;
+  const keys = forge.pki.rsa.generateKeyPair({ bits: 2048 });
+  const cert = forge.pki.createCertificate();
+  cert.publicKey = keys.publicKey;
+  cert.serialNumber = '02';
+  cert.validity.notBefore = new Date(Date.now() - 86_400_000);
+  cert.validity.notAfter = new Date(Date.now() + 86_400_000 * 30);
+  cert.setSubject([{ name: 'commonName', value: 'Luis Pérez' }]);
+  cert.setIssuer([{ name: 'commonName', value: 'Test CA' }]);
+  cert.sign(keys.privateKey, forge.md.sha256.create());
+  const p12 = Buffer.from(forge.asn1.toDer(forge.pkcs12.toPkcs12Asn1(keys.privateKey, [cert], 'clave', { algorithm: '3des' })).getBytes(), 'binary');
+  // A signature field to sign in.
+  await page.keyboard.press('f');
+  await page.getByRole('button', { name: /Kind of field/ }).click();
+  await page.getByRole('menuitemradio', { name: 'Signature field' }).click();
+  const two = pageEl(page, 2);
+  await two.scrollIntoViewIfNeeded();
+  const b = (await two.boundingBox())!;
+  await page.mouse.click(b.x + 80, b.y + 560);
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('v');
+  await page.getByRole('button', { name: 'More' }).click();
+  await page.getByRole('menuitem', { name: /Sign digitally/ }).click();
+  await page.getByLabel('Files of the certificate').setInputFiles({ name: 'luis.p12', mimeType: 'application/x-pkcs12', buffer: p12 });
+  await page.getByLabel('Its password').fill('clave');
+  await page.getByLabel('Why it is signed').fill('Witness');
+  await expect(page.getByLabel('In the field')).toHaveValue('Signature_field');
+  const waiting = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Sign the PDF' }).click();
+  const file = await waiting;
+  const bytes = new Uint8Array(Buffer.concat(await (await file.createReadStream()).toArray()));
+  const { checkSignatures } = await import('@rebopdf/core');
+  expect(await checkSignatures(bytes)).toMatchObject([{ field: 'Signature_field', signer: 'Luis Pérez', reason: 'Witness', intact: true, whole: true }]);
+  await expect(page.getByRole('status')).toHaveText(/Signed by Luis Pérez: what was signed is as it was signed\.|Signed digitally by Luis Pérez\./);
+});

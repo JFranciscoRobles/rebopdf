@@ -88,7 +88,8 @@ async function unlocked(doc: PDFDocument): Promise<Uint8Array> {
  */
 export function formOf(doc: PDFDocument): ReturnType<PDFDocument['getForm']> | undefined {
   try {
-    doc.catalog.getAcroForm()?.dict.delete(PDFName.of('XFA'));
+    const acro = doc.catalog.getAcroForm();
+    if (acro?.dict.has(PDFName.of('XFA'))) acro.dict.delete(PDFName.of('XFA'));
     return doc.getForm();
   } catch {
     return undefined;
@@ -187,7 +188,7 @@ export async function readSource(source: string, bytes: Uint8Array, password?: s
   return { pages, fields, info };
 }
 
-function readField(field: PDFField): Pick<Field, 'kind' | 'value' | 'options' | 'multiline' | 'maxLength'> | undefined {
+export function readField(field: PDFField): Pick<Field, 'kind' | 'value' | 'options' | 'multiline' | 'maxLength'> | undefined {
   if (field instanceof PDFTextField) return { kind: 'text', value: field.getText() ?? '', multiline: field.isMultiline() || undefined, maxLength: field.getMaxLength() };
   if (field instanceof PDFCheckBox) return { kind: 'checkbox', value: field.isChecked() };
   if (field instanceof PDFRadioGroup) return { kind: 'radio', value: field.getSelected() ?? '', options: field.getOptions() };

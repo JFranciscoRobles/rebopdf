@@ -180,7 +180,7 @@ export interface Signature {
 /** What could not be done to a PDF, said so a person can understand it. */
 export class PdfError extends Error {
   constructor(
-    readonly code: 'encrypted' | 'invalid' | 'empty' | 'not-found' | 'incremental',
+    readonly code: 'encrypted' | 'invalid' | 'empty' | 'not-found' | 'incremental' | 'certificate',
     message: string,
   ) {
     super(message);

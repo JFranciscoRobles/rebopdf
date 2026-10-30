@@ -65,6 +65,7 @@ await writeFile('filled.pdf', await savePdf(pdf)); // or { flatten: true }
 - **The keyboard:** every tool by a key, Enter to put a note, a text or a signature in the middle of the view, the thumbnails moved by Alt and the arrows.
 - **One history:** ⌘Z and ⇧⌘Z through every change, fields typed in included.
 - **Blacking out, for good:** boxes drawn, or text selected, are blacked out when the PDF is saved, and what was under them (text, pictures, what fields hold) is taken out of the file, not only covered. Pages with boxes are saved as pictures with the boxes burnt in, their other text kept unseen over them, to be found and selected.
+- **Digital signatures:** a PDF signed with your certificate (a .p12 or .pfx, or a .cer and its .key, as e.firma comes), in a signature field or not seen, as Acrobat checks signatures; and the signatures of a PDF checked: intact, by whom, and whether it was added to after. The certificate stays in the browser.
 - **Signed PDFs:** what is changed in a PDF with a digital signature is added after its bytes as they came, so the signature still holds; the editor says who signed, and whether the signature still holds once saved.
 - **Saving:** a PDF any reader opens, or flattened, with the fields and the marks drawn into the pages for good.
 

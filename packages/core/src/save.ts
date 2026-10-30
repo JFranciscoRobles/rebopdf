@@ -20,7 +20,7 @@ import {
   PDFHexString,
   PDFName,
   PDFNumber,
-  type PDFRef,
+  PDFRef,
   type PDFOperator,
   type PDFPage,
   PDFString,
@@ -46,7 +46,7 @@ import {
 import { dropAnnotations } from './annotations';
 import { overlaps } from './geometry';
 import { dropUnreachable, OBJECTS_AT_ONCE, writeDocument } from './objects';
-import { formOf, loadDocument } from './open';
+import { formOf, loadDocument, readField } from './open';
 import { Redactor } from './redact';
 import { type Color, type Field, type HighlightMark, type InkMark, type Mark, type NoteMark, type Pdf, PdfError, type Point, type Rect, type SignatureMark, type TextMark } from './types';
 
@@ -100,6 +100,8 @@ export async function savePdf(pdf: Pdf, options: SaveOptions = {}): Promise<Uint
   const docs = new Map<string, PDFDocument>();
   for (const source of used) docs.set(source, await loadDocument(pdf.sources[source], undefined, incremental));
   const doc = docs.get(base)!;
+  // What the catalog of the file was: pdf-lib counts it changed once it is read for adding to it.
+  const catalog = incremental ? doc.catalog.toString() : '';
   // The annotations taken as marks go: the marks are written as they are now.
   for (const [source, each] of docs) dropAnnotations(each, pdf.taken?.[source] ?? []);
 
@@ -165,10 +167,17 @@ export async function savePdf(pdf: Pdf, options: SaveOptions = {}): Promise<Uint
     for (const key of ['StructTreeRoot', 'MarkInfo']) doc.catalog.delete(PDFName.of(key));
   }
 
+  // Added to a signed file, nothing but what was changed: what the file says of itself stays, and so does its catalog, as it is.
+  if (incremental) {
+    const snapshot = (doc.context as unknown as { snapshot?: { changedObjects: Set<number> } }).snapshot;
+    const ref = doc.context.trailerInfo.Root;
+    if (snapshot && ref instanceof PDFRef && doc.catalog.toString() === catalog) snapshot.changedObjects.delete(ref.objectNumber);
+    // Each object as it is, not packed: as readers of signatures read what was added, object by object.
+    return doc.save({ objectsPerTick: OBJECTS_AT_ONCE, useObjectStreams: false });
+  }
   doc.setProducer('ReboPDF');
   doc.setModificationDate(new Date());
   if (pdf.info.title && doc.getTitle() !== pdf.info.title) doc.setTitle(pdf.info.title);
-  if (incremental) return doc.save({ objectsPerTick: OBJECTS_AT_ONCE });
   dropUnreachable(doc, gone);
   return writeDocument(doc);
 }
@@ -276,6 +285,8 @@ function fillForm(doc: PDFDocument, fields: Field[], keep: boolean) {
     }
     if (ours.kind === 'signature') continue;
     const value = ours.value;
+    // What holds what it held is not written again: a signed PDF changes only where it was filled.
+    if (JSON.stringify(readField(field)?.value) === JSON.stringify(value)) continue;
     const f = field as unknown as Record<string, (...args: unknown[]) => void>;
     switch (ours.kind) {
       case 'text':

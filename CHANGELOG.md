@@ -46,6 +46,25 @@ The first version to go to npm: 0.1.0 never went, and what it has is here.
 - The viewer drew the pages from the bytes a PDF came with, its
   annotations taken as marks drawn twice: it draws them from those without.
 
+- **Digital signatures** (`signPdf`, Sign digitally…, `sign_digitally` of
+  the MCP server): a PDF signed with a certificate of the person, a .p12 or
+  .pfx, or a .cer and its .key with the password of the key, as Mexico's
+  e.firma comes; as a PKCS #7 signature, detached, SHA-256, as Acrobat and
+  every reader of signatures checks them. In a signature field of the PDF,
+  seen in its box with who signed and when, or not seen. Added after the
+  file, so that the signatures it had still hold: checked against pyHanko,
+  both a first signature and one after it, made after the PDF was filled,
+  are intact and valid. The certificate never leaves the browser.
+- **Signatures checked** (`checkSignatures`, `check_signatures`): whether
+  what each signed is as it was signed (its digest, and its signature by
+  the key of its certificate), who signed and when, who gave the
+  certificate, and whether the file was added to after. The editor says it
+  when a signed PDF is opened. Who to trust is a reader's to say: the
+  authorities that gave the certificates are not checked.
+- Saved by adding to the file, only what changed is written: the fields
+  that hold what they held, and what the file says of itself, stay as they
+  were.
+
 ### Fixed
 
 - A signature field, and a button, were taken out of the form when the PDF

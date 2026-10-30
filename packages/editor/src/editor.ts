@@ -30,6 +30,9 @@ import {
   rotatePages,
   type SaveOptions,
   savePdf,
+  type SignatureCheck,
+  signPdf,
+  checkSignatures,
   savesIncrementally,
   whyNotIncremental,
   updateField,
@@ -37,6 +40,7 @@ import {
 } from '@rebopdf/core';
 import { fill, type Geometry, type IconName, icon, makeOption, mountViewer, type PageView, pathData, type Viewer, type Zoom } from '@rebopdf/viewer';
 import { type EditorStrings, editorStringsFor } from './i18n';
+import { askCertificate } from './certificate';
 import { askSignature, type Signature } from './signature';
 import { injectEditorStyles } from './styles';
 
@@ -282,7 +286,39 @@ export class Editor {
   /** Says a PDF is signed, by whom, and that what is changed is added after the signature. */
   private tellSigned(pdf: Pdf) {
     const [first] = pdf.signatures ?? [];
-    if (first) this.toast(fill(this.t.signedBy, { name: first.name ?? this.t.someone }));
+    if (!first) return;
+    this.toast(fill(this.t.signedBy, { name: first.name ?? this.t.someone }));
+    // Then whether what was signed is as it was signed.
+    void checkSignatures(pdf.sources[first.source]).then((checks) => {
+      if (this.current !== pdf || !checks.length) return;
+      const broken = checks.find((c) => !c.intact);
+      const name = (c: SignatureCheck) => c.signer ?? c.name ?? this.t.someone;
+      if (broken) this.toast(fill(this.t.signatureNotHolding, { name: name(broken) }));
+      else if (checks.some((c) => !c.whole)) this.toast(fill(this.t.signatureHoldsChanged, { names: checks.map(name).join(', ') }));
+      else this.toast(fill(this.t.signatureIntact, { names: checks.map(name).join(', ') }));
+    });
+  }
+
+  /** Signs the PDF with a certificate of the person, and saves or downloads it signed. */
+  async signDigitally(): Promise<void> {
+    const pdf = this.current;
+    if (!pdf || !this.viewer) return;
+    const fields = pdf.fields.filter((f) => f.kind === 'signature').map((f) => f.name);
+    const asked = await askCertificate(this.viewer.root, this.t, fields);
+    if (!asked) return;
+    let bytes: Uint8Array;
+    try {
+      bytes = await signPdf(pdf, { ...asked, font: this.options.font });
+    } catch (error) {
+      this.toast(error instanceof Error ? error.message : String(error));
+      return;
+    }
+    if (this.options.onSave) await this.options.onSave(bytes, pdf);
+    else this.give(bytes, pdf.name);
+    const signed = await openPdf(bytes, { name: pdf.name });
+    this.setPdf(signed);
+    const last = signed.signatures?.at(-1);
+    this.toast(fill(this.t.signedDigitally, { name: last?.name ?? this.t.someone }));
   }
 
   private listen(target: EventTarget, type: string, handler: (event: Event) => void) {
@@ -1275,6 +1311,7 @@ export class Editor {
       item('print', t.print, '', () => void this.viewer?.print()),
       item('download', t.download, '', () => void this.saveOrDownload()),
       item('flatten', t.downloadFlat, t.downloadFlatHint, () => void this.downloadFlat()),
+      item('signature', t.signDigitally, t.signDigitallyHint, () => void this.signDigitally()),
     ];
     this.openPop(anchor.getBoundingClientRect(), items);
     this.pop?.classList.add('rp-menu');

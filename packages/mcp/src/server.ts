@@ -5,7 +5,7 @@
 
 import { readFile, writeFile } from 'node:fs/promises';
 import { basename, extname, isAbsolute, relative, resolve } from 'node:path';
-import { extractPages, insertPdf, openPdf, type Pdf, PdfError, savePdf, savesIncrementally, whyNotIncremental } from '@rebopdf/core';
+import { checkSignatures, extractPages, insertPdf, openPdf, type Pdf, PdfError, savePdf, savesIncrementally, signPdf, whyNotIncremental } from '@rebopdf/core';
 import { version } from '../package.json';
 import { type Files, findTool, pagesOf, type Tool, TOOLS, ToolError } from './tools';
 
@@ -80,6 +80,32 @@ const OWN: (Omit<Tool, 'run' | 'writes'> & { annotations: Record<string, boolean
     description: 'Writes some pages of the PDF, with what is on them, as a PDF of their own. The PDF open stays as it is.',
     properties: { document: DOCUMENT, pages: { type: 'string', description: 'Pages by number: "3", "1,3-5".' }, file: { type: 'string', description: 'Where to write the new PDF.' } },
     required: ['pages', 'file'],
+  },
+  {
+    name: 'sign_digitally',
+    title: 'Sign digitally',
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
+    description:
+      'Signs a PDF with a certificate of the person, as readers of signatures check them, and writes it signed: to `file`, or to a copy beside it ("contract (signed).pdf"). The certificate is a .p12 or .pfx file and its password, or a .cer (or .crt, .pem) and its .key with the password of the key, as Mexico\'s e.firma comes. Signatures it had still hold. Only when the person whose certificate it is asks for it.',
+    properties: {
+      document: DOCUMENT,
+      certificate: { type: 'string', description: 'The path of the .p12, .pfx, .cer, .crt or .pem file.' },
+      key: { type: 'string', description: 'With a .cer: the path of its .key.' },
+      password: { type: 'string', description: 'The password of the certificate, or of its key.' },
+      field: { type: 'string', description: 'A signature field of the PDF to sign in (list_fields gives them). Left out, the signature is not seen on the pages.' },
+      reason: { type: 'string', description: 'Why it is signed.' },
+      location: { type: 'string', description: 'Where it is signed.' },
+      file: { type: 'string', description: 'Where to write it signed.' },
+    },
+    required: ['certificate', 'password'],
+  },
+  {
+    name: 'check_signatures',
+    title: 'Check signatures',
+    annotations: { readOnlyHint: true },
+    description:
+      'Checks the digital signatures of a PDF: whether what each signed is as it was signed, who signed and when, who gave the certificate, and whether the file was added to after. Not whether to trust who gave the certificate: a reader that knows the authorities says that.',
+    properties: { file: { type: 'string', description: 'The path of a PDF; left out, the one open as it was opened.' } },
   },
   {
     name: 'undo',
@@ -217,6 +243,49 @@ export function createPdfServer(options: ServerOptions = {}) {
         if (extname(target).toLowerCase() !== '.pdf') throw new ToolError('Write it to a file that ends in .pdf.');
         await writeFile(target, await savePdf(extractPages(doc.pdf, ids, basename(target)), { font: await fontBytes() }));
         return `Wrote ${ids.length} ${ids.length === 1 ? 'page' : 'pages'} to ${target}.`;
+      }
+      case 'sign_digitally': {
+        const doc = document(args.document);
+        const read = async (key: string) => (args[key] ? new Uint8Array(await readFile(allowed(String(args[key])))) : undefined);
+        const certificate = await read('certificate');
+        const p12 = /\.(p12|pfx)$/i.test(String(args.certificate));
+        let bytes: Uint8Array;
+        try {
+          bytes = await signPdf(doc.pdf, {
+            ...(p12 ? { p12: certificate } : { certificate, key: await read('key') }),
+            password: String(args.password ?? ''),
+            ...(args.field ? { field: String(args.field) } : {}),
+            ...(args.reason ? { reason: String(args.reason) } : {}),
+            ...(args.location ? { location: String(args.location) } : {}),
+            font: await fontBytes(),
+          });
+        } catch (error) {
+          throw new ToolError(error instanceof Error ? error.message : String(error));
+        }
+        const target = args.file ? allowed(String(args.file)) : doc.file.replace(/(\.pdf)?$/i, (ext) => ` (signed)${ext || '.pdf'}`);
+        await writeFile(target, bytes);
+        // What is open is the PDF signed, to be signed again or added to.
+        doc.history.push(doc.pdf);
+        doc.pdf = await openPdf(bytes, { name: basename(target) });
+        doc.unsaved = target !== doc.file;
+        const [check] = (await checkSignatures(bytes)).slice(-1);
+        return `Signed by ${check?.signer ?? 'the certificate'} and wrote ${target}.${check?.intact ? ' The signature checks: what was signed is as it was signed.' : ''}`;
+      }
+      case 'check_signatures': {
+        const bytes = args.file
+          ? new Uint8Array(await readFile(allowed(String(args.file))))
+          : (() => {
+              const doc = document(undefined);
+              return doc.pdf.sources[doc.pdf.pages[0].source];
+            })();
+        const checks = await checkSignatures(bytes);
+        if (!checks.length) return 'It has no digital signatures.';
+        return checks
+          .map((c) => {
+            const state = !c.intact ? `does NOT hold: ${c.problem}` : c.whole ? 'holds: the file is as it was signed' : 'holds for what it signed: the file was added to after';
+            return `- ${c.field}: ${c.signer ?? c.name ?? 'someone'}${c.date ? `, ${c.date.slice(0, 10)}` : ''}${c.reason ? ` ("${c.reason}")` : ''}, certificate by ${c.issuer ?? 'unknown'} — ${state}.`;
+          })
+          .join('\n');
       }
       case 'undo': {
         const doc = document(args.document);

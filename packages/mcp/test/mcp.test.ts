@@ -179,6 +179,33 @@ describe('the MCP server', () => {
     expect(saved.fields.map((f) => f.name)).not.toContain('billing');
   });
 
+  it('signs digitally with a .p12 or with a .cer and its .key, and checks the signatures', async () => {
+    const forge = (await import('node-forge')).default;
+    const keys = forge.pki.rsa.generateKeyPair({ bits: 2048 });
+    const cert = forge.pki.createCertificate();
+    cert.publicKey = keys.publicKey;
+    cert.serialNumber = '01';
+    cert.validity.notBefore = new Date(Date.now() - 86_400_000);
+    cert.validity.notAfter = new Date(Date.now() + 86_400_000 * 30);
+    cert.setSubject([{ name: 'commonName', value: 'Ana García' }]);
+    cert.setIssuer([{ name: 'commonName', value: 'Test CA' }]);
+    cert.sign(keys.privateKey, forge.md.sha256.create());
+    const der = (asn1: ReturnType<typeof forge.asn1.fromDer>) => Buffer.from(forge.asn1.toDer(asn1).getBytes(), 'binary');
+    const { dir, call } = await setup();
+    await writeFile(join(dir, 'ana.p12'), der(forge.pkcs12.toPkcs12Asn1(keys.privateKey, [cert], 'secret', { algorithm: '3des' })));
+    await writeFile(join(dir, 'ana.cer'), der(forge.pki.certificateToAsn1(cert)));
+    await writeFile(join(dir, 'ana.key'), der(forge.pki.encryptPrivateKeyInfo(forge.pki.wrapRsaPrivateKey(forge.pki.privateKeyToAsn1(keys.privateKey)), 'secret')));
+    await call('open_pdf', { file: 'contract.pdf' });
+    expect((await call('sign_digitally', { certificate: 'ana.p12', password: 'wrong' })).text).toBe('The password is not the one of the certificate.');
+    expect((await call('sign_digitally', { certificate: 'ana.p12', password: 'secret', reason: 'I agree' })).text).toMatch(/^Signed by Ana García and wrote .*contract \(signed\)\.pdf\. The signature checks/);
+    await call('fill_fields', { values: { accept: true } });
+    expect((await call('sign_digitally', { certificate: 'ana.cer', key: 'ana.key', password: 'secret', file: 'twice.pdf' })).text).toMatch(/^Signed by Ana García and wrote .*twice\.pdf/);
+    const checked = (await call('check_signatures', { file: 'twice.pdf' })).text.split('\n');
+    expect(checked[0]).toMatch(/^- Signature1: Ana García, .*\("I agree"\), certificate by Test CA — holds for what it signed: the file was added to after\.$/);
+    expect(checked[1]).toMatch(/^- Signature2: Ana García.* — holds: the file is as it was signed\.$/);
+    expect((await call('check_signatures', { file: 'contract.pdf' })).text).toBe('It has no digital signatures.');
+  }, 60_000);
+
   it('keeps to its folders', async () => {
     const { call } = await setup();
     const outside = await call('open_pdf', { file: '/etc/hosts' });

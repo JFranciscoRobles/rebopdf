@@ -32,6 +32,7 @@ export { type PdfJsDocument, pdfjs, readerFor, readerOf, usePdfAssets, usePdfWor
 export { samplePdf, samplePdfBytes } from './sample';
 export { boundsOf, markBounds, NOTE_SIZE, type SaveOptions, savePdf, savesIncrementally, whyNotIncremental } from './save';
 export { overlaps } from './geometry';
+export { checkSignatures, type SignatureCheck, type SignOptions, signPdf } from './sign';
 export { type Match, type PageText, pageText, readText, rectsOf, searchPdf, type TextRun } from './text';
 export type { Color, Field, FieldKind, HighlightMark, InkMark, Mark, MarkKind, MarkPatch, NewMark, NoteMark, Page, Pdf, Point, Rect, RedactionMark, Signature, SignatureMark, TextMark } from './types';
 export { PdfError } from './types';
