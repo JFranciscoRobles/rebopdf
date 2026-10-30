@@ -32,6 +32,11 @@ import {
   savePdf,
   type SignatureCheck,
   signPdf,
+  attachFile,
+  detachFile,
+  outlineOf,
+  type OutlineItem,
+  setOutline,
   addValidationData,
   authorityAt,
   checkSignatures,
@@ -198,8 +203,15 @@ export class Editor {
         for (const listener of this.pageListeners) listener(id);
       },
       onSign: (field, rect) => void this.signField(field, rect),
+      panels: true,
+      decorateOutline: (row, path, item) => this.decorateBookmark(row, path, item),
+      decorateFile: (row, file) => {
+        row.append(this.button('trash', fill(t.detachFile, { name: file.name }), () => this.commit(detachFile(this.current!, file.name)), 16));
+      },
     });
     this.viewer = viewer;
+    viewer.slots.outline.append(this.textButton('plus', t.addBookmark, () => void this.addBookmarkHere()));
+    viewer.slots.files.append(this.textButton('filePlus', t.attachFile, () => this.attachFiles()));
     const root = viewer.root;
     root.setAttribute('aria-label', t.editor);
     root.dataset.tool = this.tool;
@@ -393,6 +405,136 @@ export class Editor {
         ? fill(this.t.signedTimestamped, { name: last?.name ?? this.t.someone, authority: check.timestamp.authority ?? '' })
         : fill(this.t.signedDigitally, { name: last?.name ?? this.t.someone }),
     );
+  }
+
+  // --- Bookmarks and files carried ---------------------------------------------
+
+  /** A button with its words beside its icon. */
+  private textButton(name: IconName, label: string, run: () => void): HTMLButtonElement {
+    const b = this.button(name, label, run, 16);
+    b.classList.add('rp-text-button');
+    b.append(Object.assign(this.doc.createElement('span'), { textContent: label }));
+    return b;
+  }
+
+  /** Changes the bookmarks: as they are now (of the files, until changed), given to be changed. */
+  private async changeOutline(change: (items: OutlineItem[]) => void) {
+    if (!this.current) return;
+    const items = structuredClone(await outlineOf(this.current));
+    change(items);
+    this.commit(setOutline(this.current, items));
+  }
+
+  /** A bookmark to the place in view, named by its page, to be renamed at once. */
+  private async addBookmarkHere() {
+    const place = this.viewer?.placeInView();
+    if (!place || !this.current) return;
+    const n = this.current.pages.findIndex((p) => p.id === place.page) + 1;
+    let at = 0;
+    await this.changeOutline((items) => {
+      items.push({ title: fill(this.t.pageN, { n }), to: place, items: [] });
+      at = items.length - 1;
+    });
+    await this.renameBookmark([at]);
+  }
+
+  /** The list a bookmark is in, by its path, and its index in it. */
+  private static siblings(items: OutlineItem[], path: number[]): [OutlineItem[], number] {
+    let list = items;
+    for (const i of path.slice(0, -1)) list = list[i].items;
+    return [list, path[path.length - 1]];
+  }
+
+  /** What the editor adds to a bookmark: renamed, moved up, down, in and out, and taken away. */
+  private decorateBookmark(row: HTMLElement, path: number[], item: OutlineItem) {
+    const t = this.t;
+    const tools = this.doc.createElement('div');
+    tools.className = 'rp-outline-tools';
+    const act = (name: IconName, label: string, change: (items: OutlineItem[]) => void) => this.button(name, fill(label, { title: item.title }), () => void this.changeOutline(change), 14);
+    const move = (by: -1 | 1) => (items: OutlineItem[]) => {
+      const [list, i] = Editor.siblings(items, path);
+      const j = i + by;
+      if (j < 0 || j >= list.length) return;
+      [list[i], list[j]] = [list[j], list[i]];
+    };
+    tools.append(
+      this.button('pen', fill(t.renameBookmark, { title: item.title }), () => void this.renameBookmark(path), 14),
+      act('chevronUp', t.bookmarkUp, move(-1)),
+      act('chevronDown', t.bookmarkDown, move(1)),
+      act('chevronRight', t.bookmarkIn, (items) => {
+        // Under the bookmark before it.
+        const [list, i] = Editor.siblings(items, path);
+        if (i === 0) return;
+        const [moved] = list.splice(i, 1);
+        list[i - 1].items.push(moved);
+      }),
+      act('chevronLeft', t.bookmarkOut, (items) => {
+        // After the bookmark it is under.
+        if (path.length < 2) return;
+        const [list, i] = Editor.siblings(items, path);
+        const [moved] = list.splice(i, 1);
+        const [outer, j] = Editor.siblings(items, path.slice(0, -1));
+        outer.splice(j + 1, 0, moved);
+      }),
+      act('trash', t.removeBookmark, (items) => {
+        const [list, i] = Editor.siblings(items, path);
+        list.splice(i, 1);
+      }),
+    );
+    row.append(tools);
+  }
+
+  /** The name of a bookmark written in its place, kept with Enter, left with Escape. */
+  private async renameBookmark(path: number[]) {
+    // The bookmarks are drawn again after a change, a moment after: the row is waited for.
+    const find = () => [...(this.viewer?.root.querySelectorAll<HTMLElement>('.rp-outline .rp-outline-row') ?? [])].find((r) => r.dataset.path === path.join('.'));
+    let row = find();
+    for (let i = 0; i < 60 && !row?.isConnected; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 16));
+      row = find();
+    }
+    const go = row?.querySelector<HTMLButtonElement>('.rp-outline-item');
+    if (!row || !go) return;
+    const input = this.doc.createElement('input');
+    input.className = 'rp-input rp-outline-name';
+    input.value = go.textContent ?? '';
+    input.setAttribute('aria-label', this.t.bookmarkName);
+    go.replaceWith(input);
+    input.focus();
+    input.select();
+    let done = false;
+    const finish = (keep: boolean) => {
+      if (done) return;
+      done = true;
+      const title = input.value.trim();
+      if (keep && title && title !== go.textContent)
+        void this.changeOutline((items) => {
+          const [list, i] = Editor.siblings(items, path);
+          list[i].title = title;
+        });
+      else input.replaceWith(go);
+    };
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') finish(true);
+      else if (event.key === 'Escape') {
+        event.stopPropagation();
+        finish(false);
+      }
+    });
+    input.addEventListener('blur', () => finish(true));
+  }
+
+  /** Files chosen, carried by the PDF. */
+  private attachFiles() {
+    const input = Object.assign(this.doc.createElement('input'), { type: 'file', multiple: true });
+    input.addEventListener('change', async () => {
+      let next = this.current;
+      if (!next) return;
+      for (const file of input.files ?? [])
+        next = attachFile(next, { name: file.name, data: new Uint8Array(await file.arrayBuffer()), ...(file.type ? { mime: file.type } : {}), modified: new Date(file.lastModified).toISOString() });
+      if (next !== this.current) this.commit(next);
+    });
+    input.click();
   }
 
   private listen(target: EventTarget, type: string, handler: (event: Event) => void) {

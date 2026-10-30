@@ -8,7 +8,7 @@
 // identity, its colours (an sRGB profile) and its metadata (XMP) as PDF/A
 // says, by pdf-lib. PDF/A-2B, or 3B when it carries files.
 
-import { PDFArray, PDFDict, type PDFDocument, PDFName, PDFNumber, type PDFObject, type PDFRef, PDFStream } from '@cantoo/pdf-lib';
+import { decodePDFRawStream, PDFArray, PDFDict, type PDFDocument, PDFName, PDFNumber, type PDFObject, PDFRawStream, type PDFRef, PDFStream } from '@cantoo/pdf-lib';
 import { Encodings } from '@cantoo/pdf-lib/standard-fonts';
 import { standardFont } from './pdfjs';
 import { PdfError } from './types';
@@ -419,4 +419,17 @@ export async function makePdfA(doc: PDFDocument, level?: PdfALevel): Promise<Pdf
 
   doc.convertToPDFA({ conformance } as never);
   return conformance;
+}
+
+/** Takes out of a document's metadata that it is a PDF/A: once protected by a password, it is not one. */
+export function unclaimPdfA(doc: PDFDocument): void {
+  const metadata = doc.catalog.lookup(PDFName.of('Metadata'));
+  if (!(metadata instanceof PDFStream)) return;
+  const raw = metadata instanceof PDFRawStream ? decodePDFRawStream(metadata).decode() : metadata.getContents();
+  const xmp = new TextDecoder().decode(raw);
+  if (!xmp.includes('pdfaid')) return;
+  const without = xmp.replace(/\s*pdfaid:\w+\s*=\s*("[^"]*"|'[^']*')/g, '').replace(/<pdfaid:(\w+)>[^<]*<\/pdfaid:\1>/g, '');
+  doc.catalog.set(PDFName.of('Metadata'), doc.context.register(doc.context.stream(new TextEncoder().encode(without), { Type: 'Metadata', Subtype: 'XML' } as never)));
+  // pdf-lib keeps it in step no longer.
+  (doc as unknown as { managePDFAMetadata?: boolean }).managePDFAMetadata = false;
 }

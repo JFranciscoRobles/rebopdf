@@ -119,6 +119,12 @@ The first version to go to npm: 0.1.0 never went, and what it has is here.
   authorities sign with. In the editor, Sign digitally has a field for the
   authority (`signing.timestamp`) and a box to keep what checks it; in the
   MCP server, `timestamp`, `long_term` and `trusted`.
+- **Bookmarks and files carried**: `setOutline`, `addBookmark`,
+  `attachFile`, `detachFile`, and `pdf.attachments` read when it is opened;
+  written when it is saved, the bookmarks to the pages as they are then,
+  the files as PDF/A-3 asks. Beside the pages, the viewer has a Files tab;
+  the editor makes, names, moves and removes bookmarks, and attaches and
+  takes off files. In the MCP server, `bookmarks` and `attachments`.
 - **PDF/A** (`pdfa` of `savePdf`; Download as PDF/A in the editor; `pdfa`
   of `save_pdf`): PDF/A-2B (3B when it carries files), every font it draws
   with carried in it: those it only names taken from PDF.js's (Liberation

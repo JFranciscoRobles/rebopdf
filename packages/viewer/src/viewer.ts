@@ -13,6 +13,7 @@ import {
   type Match,
   marksOn,
   type OutlineItem,
+  type Attachment,
   outlineOf,
   type Page,
   type PageLink,
@@ -65,7 +66,15 @@ export interface ViewerOptions {
   decoratePage?: (view: PageView) => void;
   /** @internal What is done when a signature field is pressed: the editor signs it. */
   onSign?: (field: Field, rect: Rect) => void;
+  /** @internal The tabs of the contents and the files beside the pages even when the PDF has none: the editor makes them. */
+  panels?: boolean;
+  /** @internal What the editor adds to each bookmark, by its path of indexes. */
+  decorateOutline?: (row: HTMLElement, path: number[], item: OutlineItem) => void;
+  /** @internal What the editor adds to each file the PDF carries. */
+  decorateFile?: (row: HTMLElement, file: Attachment) => void;
 }
+
+type Panel = 'pages' | 'contents' | 'files';
 
 /** @internal What is kept of each page on the screen. */
 export interface PageView {
@@ -101,7 +110,7 @@ export class Viewer {
   readonly root: HTMLElement;
   readonly t: Strings;
   /** @internal Where the editor puts its tools: in the bar after the title, in its middle and at its end, and over the thumbnails. */
-  readonly slots: { start: HTMLElement; tools: HTMLElement; end: HTMLElement; side: HTMLElement };
+  readonly slots: { start: HTMLElement; tools: HTMLElement; end: HTMLElement; side: HTMLElement; outline: HTMLElement; files: HTMLElement };
   /** @internal */
   readonly scroll: HTMLElement;
   /** @internal */
@@ -116,6 +125,13 @@ export class Viewer {
   private heading: HTMLElement;
   private tabs: HTMLElement;
   private outlineEl: HTMLElement;
+  private outlineList: HTMLElement;
+  private filesEl: HTMLElement;
+  private filesList: HTMLElement;
+  /** The bookmarks shown open, by their path. */
+  private expanded = new Set<string>();
+  private outlineOfPdf?: OutlineItem[];
+  private filesOfPdf?: Attachment[];
   /** The files the outline was read from, in their order. */
   private outlineSources = '';
   private sideButton?: HTMLButtonElement;
@@ -167,7 +183,14 @@ export class Viewer {
     const bar = make('div', 'rp-bar');
     bar.setAttribute('role', 'toolbar');
     bar.setAttribute('aria-label', t.viewer);
-    this.slots = { start: make('div', 'rp-group'), tools: make('div', 'rp-group rp-tools'), end: make('div', 'rp-group'), side: make('div', 'rp-group rp-side-actions') };
+    this.slots = {
+      start: make('div', 'rp-group'),
+      tools: make('div', 'rp-group rp-tools'),
+      end: make('div', 'rp-group'),
+      side: make('div', 'rp-group rp-side-actions'),
+      outline: make('div', 'rp-panel-actions'),
+      files: make('div', 'rp-panel-actions'),
+    };
     this.sideButton = this.button('sidebar', t.showPages, () => this.toggleThumbnails());
     this.sideButton.setAttribute('aria-expanded', 'false');
     this.titleEl = make('div', 'rp-title');
@@ -230,11 +253,11 @@ export class Viewer {
     const head = make('div', 'rp-side-head');
     this.heading = make('span');
     this.heading.textContent = t.pages;
-    // Pages and contents, when the PDF has a table of contents.
+    // Pages, contents and files, when the PDF has a table of contents or files.
     this.tabs = make('div', 'rp-side-tabs');
     this.tabs.setAttribute('role', 'tablist');
     this.tabs.hidden = true;
-    const tab = (label: string, panel: 'pages' | 'contents') => {
+    const tab = (label: string, panel: Panel) => {
       const b = make('button', 'rp-side-tab');
       b.type = 'button';
       b.textContent = label;
@@ -244,22 +267,30 @@ export class Viewer {
       b.addEventListener('keydown', (event) => {
         if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
         event.preventDefault();
-        const other = panel === 'pages' ? 'contents' : 'pages';
-        this.showPanel(other);
-        this.tabs.querySelector<HTMLElement>(`[data-panel="${other}"]`)?.focus();
+        const shown = [...this.tabs.querySelectorAll<HTMLElement>('[role="tab"]')].filter((t) => !t.hidden);
+        const next = shown[(shown.indexOf(b) + (event.key === 'ArrowRight' ? 1 : -1) + shown.length) % shown.length];
+        this.showPanel(next.dataset.panel as Panel);
+        next.focus();
       });
       return b;
     };
-    this.tabs.append(tab(t.pages, 'pages'), tab(t.contents, 'contents'));
+    this.tabs.append(tab(t.pages, 'pages'), tab(t.contents, 'contents'), tab(t.files, 'files'));
     head.append(this.heading, this.tabs, this.slots.side);
     this.outlineEl = make('div', 'rp-outline');
     this.outlineEl.setAttribute('role', 'tabpanel');
     this.outlineEl.hidden = true;
+    this.outlineList = make('div');
+    this.outlineEl.append(this.slots.outline, this.outlineList);
+    this.filesEl = make('div', 'rp-outline rp-files');
+    this.filesEl.setAttribute('role', 'tabpanel');
+    this.filesEl.hidden = true;
+    this.filesList = make('ul');
+    this.filesEl.append(this.slots.files, this.filesList);
     this.thumbs = make('ol', 'rp-thumbs');
     this.thumbs.setAttribute('role', 'listbox');
     this.thumbs.setAttribute('aria-label', t.pages);
     if (options.decorateThumb) this.thumbs.setAttribute('aria-multiselectable', 'true');
-    this.side.append(head, this.thumbs, this.outlineEl);
+    this.side.append(head, this.thumbs, this.outlineEl, this.filesEl);
     this.side.hidden = true;
 
     // The pages.
@@ -386,7 +417,10 @@ export class Viewer {
     if (before.pages !== pdf.pages) {
       this.build();
       this.layout(true);
-    } else this.overlays();
+    } else {
+      this.overlays();
+      this.panels(false);
+    }
     if (before !== pdf && this.matches.length && before.pages !== pdf.pages) void this.search(this.findInput.value);
   }
 
@@ -506,11 +540,7 @@ export class Viewer {
     this.titleEl.textContent = this.pdf.name.replace(/\.pdf$/i, '');
     this.titleEl.title = this.pdf.name;
     this.buildThumbs();
-    const sources = [...new Set(this.pdf.pages.map((p) => p.source))].join(',');
-    if (sources !== this.outlineSources) {
-      this.outlineSources = sources;
-      void this.buildOutline();
-    } else if (this.outlineEl.childElementCount) void this.buildOutline();
+    this.panels(true);
     if (!this.views.has(this.current)) this.current = '';
   }
 
@@ -839,6 +869,15 @@ export class Viewer {
     );
   }
 
+  /** The place of the PDF at the top of the view: its page, and how high on it. */
+  placeInView(): Place | undefined {
+    const view = this.views.get(this.current) ?? this.views.get(this.pdf.pages[0]?.id ?? '');
+    if (!view) return undefined;
+    const y = Math.max(0, this.scroll.scrollTop + 16 - view.el.offsetTop);
+    const top = view.geo.toPage({ x: 0, y }).y;
+    return { page: view.page.id, top: Math.round(Math.min(view.page.box.y + view.page.box.height, Math.max(view.page.box.y, top))) };
+  }
+
   /** Brings a place of the PDF into view: its page, at its height when the PDF says it. */
   goToPlace(place: Place): void {
     const view = this.views.get(place.page);
@@ -847,11 +886,11 @@ export class Viewer {
     this.goTo(place.page, { y });
   }
 
-  private showPanel(panel: 'pages' | 'contents') {
-    const contents = panel === 'contents';
-    this.thumbs.hidden = contents;
-    this.outlineEl.hidden = !contents;
-    this.slots.side.hidden = contents;
+  private showPanel(panel: Panel) {
+    this.thumbs.hidden = panel !== 'pages';
+    this.outlineEl.hidden = panel !== 'contents';
+    this.filesEl.hidden = panel !== 'files';
+    this.slots.side.hidden = panel !== 'pages';
     for (const b of this.tabs.querySelectorAll<HTMLElement>('[role="tab"]')) {
       const on = b.dataset.panel === panel;
       b.setAttribute('aria-selected', String(on));
@@ -859,24 +898,47 @@ export class Viewer {
     }
   }
 
+  /** The tabs beside the pages: the contents when the PDF has some, its files when it carries some, both for the editor. */
+  private showTabs(contents: boolean, files: boolean) {
+    const tabOf = (panel: Panel) => this.tabs.querySelector<HTMLElement>(`[data-panel="${panel}"]`)!;
+    const always = !!this.options.panels;
+    tabOf('contents').hidden = !(contents || always);
+    tabOf('files').hidden = !(files || always);
+    const any = contents || files || always;
+    this.tabs.hidden = !any;
+    this.heading.hidden = any;
+    const open = (['contents', 'files'] as Panel[]).find((p) => tabOf(p).getAttribute('aria-selected') === 'true' && !tabOf(p).hidden);
+    if (!open) this.showPanel(!always && contents && this.thumbs.hidden ? 'contents' : 'pages');
+  }
+
+  /** The contents and the files beside the pages, drawn again when they changed (or, the pages changed, when their places may have). */
+  private panels(pagesChanged: boolean) {
+    const sources = [...new Set(this.pdf.pages.map((p) => p.source))].join(',');
+    if (sources !== this.outlineSources || this.pdf.outline !== this.outlineOfPdf || (pagesChanged && this.outlineList.childElementCount)) {
+      this.outlineSources = sources;
+      this.outlineOfPdf = this.pdf.outline;
+      void this.buildOutline();
+    }
+    if (this.pdf.attachments !== this.filesOfPdf) {
+      this.filesOfPdf = this.pdf.attachments;
+      this.buildFiles();
+    }
+  }
+
   /** The table of contents, a tab beside the pages when the PDF has one. */
   private async buildOutline() {
     const items = await outlineOf(this.pdf).catch(() => [] as OutlineItem[]);
-    const has = items.length > 0;
-    this.tabs.hidden = !has;
-    this.heading.hidden = has;
-    if (!has) {
-      this.outlineEl.replaceChildren();
-      this.showPanel('pages');
-      return;
-    }
-    const list = (entries: OutlineItem[], depth: number): HTMLUListElement => {
+    const files = !!this.pdf.attachments?.length;
+    const list = (entries: OutlineItem[], depth: number, at: number[]): HTMLUListElement => {
       const ul = this.doc.createElement('ul');
-      for (const item of entries) {
+      entries.forEach((item, index) => {
+        const path = [...at, index];
+        const key = path.join('.');
         const li = this.doc.createElement('li');
         const row = this.doc.createElement('div');
         row.className = 'rp-outline-row';
         row.style.setProperty('--depth', String(depth));
+        row.dataset.path = key;
         const go = this.doc.createElement('button');
         go.type = 'button';
         go.className = 'rp-outline-item';
@@ -888,8 +950,8 @@ export class Viewer {
           if (this.doc.defaultView?.matchMedia('(max-width: 640px)').matches) this.toggleThumbnails(false);
         });
         if (item.items.length) {
-          const inner = list(item.items, depth + 1);
-          inner.hidden = depth > 0;
+          const inner = list(item.items, depth + 1, path);
+          inner.hidden = depth > 0 && !this.expanded.has(key);
           const toggle = this.doc.createElement('button');
           toggle.type = 'button';
           toggle.className = 'rp-outline-toggle';
@@ -899,20 +961,59 @@ export class Viewer {
           toggle.addEventListener('click', () => {
             inner.hidden = !inner.hidden;
             toggle.setAttribute('aria-expanded', String(!inner.hidden));
+            if (inner.hidden) this.expanded.delete(key);
+            else this.expanded.add(key);
           });
           row.append(toggle, go);
+          this.options.decorateOutline?.(row, path, item);
           li.append(row, inner);
         } else {
           row.append(go);
+          this.options.decorateOutline?.(row, path, item);
           li.append(row);
         }
         ul.append(li);
-      }
+      });
       return ul;
     };
-    this.outlineEl.replaceChildren(list(items, 0));
-    if (!this.outlineEl.hidden || this.thumbs.hidden) this.showPanel('contents');
-    else this.showPanel('pages');
+    this.outlineList.replaceChildren(
+      ...(items.length ? [list(items, 0, [])] : this.options.panels ? [Object.assign(this.doc.createElement('p'), { className: 'rp-panel-empty', textContent: this.t.noContents })] : []),
+    );
+    this.showTabs(items.length > 0, files);
+  }
+
+  /** The files the PDF carries, each to download. */
+  private buildFiles() {
+    const files = this.pdf.attachments ?? [];
+    const size = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+    const rows = files.map((file) => {
+      const li = this.doc.createElement('li');
+      li.className = 'rp-file';
+      const a = this.doc.createElement('a');
+      a.className = 'rp-outline-item';
+      a.href = '#';
+      a.download = file.name;
+      a.append(
+        icon(this.doc, 'download', 14),
+        Object.assign(this.doc.createElement('span'), { textContent: file.name }),
+        Object.assign(this.doc.createElement('small'), { textContent: size(file.data.length) }),
+      );
+      a.title = file.description ?? fill(this.t.downloadFile, { name: file.name });
+      a.addEventListener('click', (event) => {
+        event.preventDefault();
+        const url = URL.createObjectURL(new Blob([file.data as BlobPart], { type: file.mime ?? 'application/octet-stream' }));
+        const link = Object.assign(this.doc.createElement('a'), { href: url, download: file.name });
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      });
+      li.append(a);
+      this.options.decorateFile?.(li, file);
+      return li;
+    });
+    this.filesList.replaceChildren(...rows);
+    if (!rows.length && this.options.panels) this.filesList.append(Object.assign(this.doc.createElement('li'), { className: 'rp-panel-empty', textContent: this.t.noFiles }));
+    const contents = this.outlineList.querySelector('ul') !== null;
+    this.showTabs(contents, files.length > 0);
   }
 
   /** Follows the page in view as the pages scroll. */

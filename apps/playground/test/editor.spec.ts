@@ -342,7 +342,7 @@ test('a PDF with a password is asked for it, opened, and its pages drawn', async
 test('links lead to their place, and the table of contents to each section', async ({ page }) => {
   await expect(page.getByRole('tab', { name: 'Contents' })).toBeVisible();
   await page.getByRole('tab', { name: 'Contents' }).click();
-  await page.getByRole('button', { name: '4. Ownership' }).click();
+  await page.getByRole('button', { name: '4. Ownership', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Page number' })).toHaveValue('2');
   await page.getByRole('tab', { name: 'Pages' }).click();
   await page.locator('.rp-thumb').first().click();
@@ -729,4 +729,37 @@ test('a PDF is downloaded as PDF/A, every font carried in it', async ({ page }) 
   expect(bare).toEqual([]);
   expect(new TextDecoder('latin1').decode(bytes)).toContain('pdfaid');
   expect((await openPdf(bytes)).fields.find((f) => f.name === 'client.name')?.value).toBe('Ana García');
+});
+
+test('bookmarks are made, named, moved and taken away; files are attached', async ({ page }) => {
+  const { outlineOf } = await import('@rebopdf/core');
+  await page.getByRole('tab', { name: 'Contents' }).click();
+  const panel = page.locator('.rp-outline').first();
+  // The sample has its own; one more, to the place in view, named at once.
+  await panel.getByRole('button', { name: 'Add a bookmark' }).click();
+  const name = panel.getByRole('textbox', { name: 'Name of the bookmark' });
+  await name.fill('Firmas');
+  await name.press('Enter');
+  await expect(panel.getByRole('button', { name: 'Firmas', exact: true })).toBeVisible();
+  // Up, then under the one before it.
+  await panel.getByRole('button', { name: 'Move Firmas up' }).click();
+  await panel.getByRole('button', { name: 'Put Firmas under the one before' }).click();
+  const results = await new AxeBuilder({ page }).include('.rp-side').analyze();
+  expect(results.violations.map((v) => v.id)).toEqual([]);
+  // A file carried.
+  await page.getByRole('tab', { name: 'Files' }).click();
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Attach a file' }).click();
+  await (await chooser).setFiles({ name: 'cuentas.csv', mimeType: 'text/csv', buffer: Buffer.from('a,b\n1,2\n') });
+  await expect(page.locator('.rp-files').getByText('cuentas.csv')).toBeVisible();
+  const { pdf } = await downloaded(page);
+  const outline = await outlineOf(pdf);
+  const titles = (items: typeof outline): string[] => items.flatMap((i) => [i.title, ...titles(i.items)]);
+  expect(titles(outline)).toContain('Firmas');
+  expect(outline.some((i) => i.items.some((j) => j.title === 'Firmas'))).toBe(true);
+  expect(pdf.attachments?.map((a) => a.name)).toEqual(['cuentas.csv']);
+  // Taken away.
+  await page.getByRole('tab', { name: 'Contents' }).click();
+  await panel.getByRole('button', { name: 'Remove Firmas' }).click({ force: true });
+  await expect(panel.getByRole('button', { name: 'Firmas', exact: true })).toHaveCount(0);
 });

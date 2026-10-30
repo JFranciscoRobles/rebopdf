@@ -106,6 +106,14 @@ const CSS = `
 .rp-outline-toggle { display: grid; place-items: center; flex: none; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--rp-muted); cursor: pointer; }
 .rp-outline-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
 .rp-outline-row:not(:has(.rp-outline-toggle)) { padding-left: calc(var(--depth) * 12px + 22px); }
+.rp-panel-actions:empty { display: none; }
+.rp-panel-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0 8px; }
+.rp-panel-empty { margin: 8px; color: var(--rp-muted); font-size: 12.5px; }
+.rp-files ul { list-style: none; margin: 0; padding: 0; }
+.rp-file { display: flex; align-items: center; gap: 2px; }
+.rp-file .rp-outline-item { display: flex; align-items: center; gap: 8px; text-decoration: none; }
+.rp-file .rp-outline-item span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-file small { color: var(--rp-muted); font-size: 11.5px; }
 .rp-links { pointer-events: none; }
 .rp-recognized { line-height: 1; }
 .rp-recognized span { position: absolute; color: transparent; white-space: pre; cursor: text; transform-origin: 0 0; font-family: sans-serif; }

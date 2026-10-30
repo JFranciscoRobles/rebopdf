@@ -47,7 +47,9 @@ import { dropAnnotations } from './annotations';
 import { overlaps } from './geometry';
 import { annotate, dropUnreachable, mergeWidget } from './objects';
 import { type OptimizeOptions, optimizeDocument } from './optimize';
-import { makePdfA, type PdfALevel } from './pdfa';
+import { outlineOf } from './links';
+import { attachmentsChanged, writeAttachments, writeOutline } from './outline';
+import { makePdfA, type PdfALevel, unclaimPdfA } from './pdfa';
 import { writeDocument, writeIncrement } from './writer';
 import { formOf, loadDocument, readField } from './open';
 import { Redactor, unseenOf, writeUnseen } from './redact';
@@ -203,6 +205,9 @@ export async function savePdf(pdf: Pdf, options: SaveOptions = {}): Promise<Uint
   } finally {
     await redactor.close();
   }
+  // Its bookmarks, once changed, to its pages as they are now; and the files it carries, once changed.
+  if (pdf.outline) writeOutline(doc, await outlineOf(pdf), (id) => order[pdf.pages.findIndex((page) => page.id === id)]?.ref);
+  if (attachmentsChanged(pdf)) writeAttachments(doc, pdf.attachments!);
   if (boxes.size) {
     // The tagged structure of a PDF keeps its text apart from its pages: it goes.
     for (const key of ['StructTreeRoot', 'MarkInfo']) doc.catalog.delete(PDFName.of(key));
@@ -227,6 +232,8 @@ export async function savePdf(pdf: Pdf, options: SaveOptions = {}): Promise<Uint
     await makePdfA(doc, options.pdfa === true ? undefined : options.pdfa);
   }
   if (options.protect) {
+    // Protected, a PDF/A is no longer one: what says it is goes.
+    unclaimPdfA(doc);
     const { password, ownerPassword, permissions } = options.protect;
     const allowed = { printing: 'highResolution' as const, copying: true, modifying: true, annotating: true, fillingForms: true, contentAccessibility: true, documentAssembly: true, ...permissions };
     // Without the owner's password, no one may do more than the password lets: a random one no one knows.

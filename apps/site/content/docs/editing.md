@@ -52,3 +52,16 @@ Download smaller (in the menu ⋯) makes the PDF smaller: its pictures no bigger
 Download as PDF/A (in the menu ⋯) makes a PDF/A-2B, as archives and many offices ask documents to be kept: every font it draws with carried in it (those it only names taken from the ones PDF.js carries, made to measure as the standard ones: Liberation Sans for Helvetica and Arial, Foxit's for Times, Courier, Symbol and ZapfDingbats), nothing that runs, its colours and its metadata as PDF/A says. In code, `savePdf(pdf, { pdfa: true })` (or `'3B'`; it is 3B by itself when the PDF carries files). In a browser, the fonts are fetched from the folder given to `usePdfAssets`.
 
 To be sure an archive takes it, check it with [veraPDF](https://verapdf.org/).
+
+## Bookmarks and files carried
+
+Beside the pages, Contents has the bookmarks of the PDF: in the editor, Add a bookmark makes one to the place in view, named at once, and each can be renamed, moved up and down, put under the one before or taken out of it, and removed. Files has the files the PDF carries, each to download: Attach a file adds some. In code:
+
+```ts
+import { setOutline, attachFile, detachFile, outlineOf } from '@rebopdf/core';
+
+let next = setOutline(pdf, [{ title: 'Terms', to: { page: pdf.pages[1].id }, items: [] }]);
+next = attachFile(next, { name: 'accounts.csv', data, mime: 'text/csv' });
+```
+
+Bookmarks lead to the pages as they are when the PDF is saved; a PDF/A that carries files is PDF/A-3.

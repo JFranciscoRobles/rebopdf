@@ -36,12 +36,14 @@ export { boundsOf, markBounds, NOTE_SIZE, type SaveOptions, savePdf, savesIncrem
 export { overlaps } from './geometry';
 export { png, REDACTED_SCALE, Redactor } from './redact';
 export type { OptimizeOptions } from './optimize';
+export { addBookmark, attachFile, detachFile, setOutline } from './outline';
 export type { PdfALevel } from './pdfa';
 export type { Permissions } from './save';
 export { addValidationData, type CheckOptions, checkSignatures, type Revocation, type SignatureCheck, type SignOptions, signPdf, type TimestampAuthority, timestampPdf } from './sign';
 export { authorityAt } from './cms';
 export { type Match, type PageText, pageText, readText, rectsOf, searchPdf, type TextRun } from './text';
 export type {
+  Attachment,
   Color,
   Field,
   FieldKind,

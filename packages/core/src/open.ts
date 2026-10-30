@@ -20,6 +20,7 @@ import { dateOf, takeMarks } from './annotations';
 import { dropUnreachable, OBJECTS_AT_ONCE } from './objects';
 import { writeDocument } from './writer';
 import { type Field, type Page, type Pdf, PdfError, type Rect, type Signature } from './types';
+import { attachmentsOf } from './outline';
 
 let counter = 0;
 /** An id not used before in this run. */
@@ -108,6 +109,7 @@ export async function openPdf(bytes: Uint8Array, options: OpenOptions = {}): Pro
   }
   const { pages, fields, info } = await readSource(source, bytes, undefined, doc);
   const signatures = signaturesOf(doc, source);
+  const attachments = attachmentsOf(doc);
   const pdf: Pdf = {
     name: options.name ?? (info.title ? `${info.title}.pdf` : 'document.pdf'),
     sources: { [source]: bytes },
@@ -116,6 +118,7 @@ export async function openPdf(bytes: Uint8Array, options: OpenOptions = {}): Pro
     marks: [],
     info,
     ...(signatures.length ? { signatures } : {}),
+    attachments,
   };
   if (options.marks === false) return pdf;
   // The highlights, notes and ink it came with, as marks. Its bytes stay as they came (a signature holds on them);

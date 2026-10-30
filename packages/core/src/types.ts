@@ -7,6 +7,8 @@
 // Places on a page are in its own space, as the PDF has it: points (1/72 of
 // an inch) from the bottom left of the page, before it is turned.
 
+import type { OutlineItem } from './links';
+
 /** A point of a page, in points from its bottom left. */
 export interface Point {
   x: number;
@@ -170,6 +172,21 @@ export interface Pdf {
    * it when the PDF is saved.
    */
   recognized?: Record<string, Word[]>;
+  /** Its bookmarks, once changed: written in place of those of its files. Left out, they are read from its files. */
+  outline?: OutlineItem[];
+  /** The files it carries. */
+  attachments?: Attachment[];
+}
+
+/** A file a PDF carries. */
+export interface Attachment {
+  name: string;
+  data: Uint8Array;
+  description?: string;
+  /** Its type, as "text/csv". */
+  mime?: string;
+  /** When it was changed last, as ISO 8601. */
+  modified?: string;
 }
 
 /** A word of a page, and the box it takes. */

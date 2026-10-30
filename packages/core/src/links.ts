@@ -73,6 +73,12 @@ export async function linksOf(pdf: Pdf, id: string): Promise<PageLink[]> {
 
 /** The outline of the PDF, of each of its files in the order their pages first come. */
 export async function outlineOf(pdf: Pdf): Promise<OutlineItem[]> {
+  // Changed, its bookmarks are its own: those to a page taken out lead nowhere.
+  if (pdf.outline) {
+    const kept = (items: OutlineItem[]): OutlineItem[] =>
+      items.map((item) => ({ title: item.title, ...(item.to && pdf.pages.some((p) => p.id === item.to!.page) ? { to: item.to } : {}), items: kept(item.items) }));
+    return kept(pdf.outline);
+  }
   const out: OutlineItem[] = [];
   for (const source of [...new Set(pdf.pages.map((p) => p.source))]) {
     const reader = await readerFor(pdf, source);

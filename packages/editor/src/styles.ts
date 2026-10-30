@@ -79,6 +79,14 @@ const CSS = `
 .rp-dialog-field { display: grid; gap: 6px; color: var(--rp-muted); font-size: 12.5px; }
 .rp-dialog-check { display: flex; gap: 8px; align-items: flex-start; color: var(--rp-muted); font-size: 12.5px; line-height: 1.4; }
 .rp-dialog-check input { margin-top: 2px; }
+.rp-text-button { display: inline-flex; align-items: center; gap: 6px; width: auto; padding: 0 10px; font-size: 12.5px; }
+.rp-outline-row { position: relative; }
+.rp-outline-tools { display: flex; flex: none; opacity: 0; }
+.rp-outline-row:hover .rp-outline-tools, .rp-outline-row:focus-within .rp-outline-tools { opacity: 1; }
+.rp-outline-tools .rp-button { width: 24px; height: 24px; }
+.rp-outline-name { flex: 1; min-width: 0; height: 28px; font-size: 13px; }
+.rp-file .rp-button { width: 26px; height: 26px; flex: none; }
+@media (pointer: coarse) { .rp-outline-tools { opacity: 1; } }
 .rp-dialog-problem { margin: 0; min-height: 1em; color: #c92a2a; font-size: 13px; }
 .rp-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .rp-upload-preview { display: grid; place-items: center; height: 140px; border: 1px dashed var(--rp-border-strong); border-radius: 10px; background: #fff; }

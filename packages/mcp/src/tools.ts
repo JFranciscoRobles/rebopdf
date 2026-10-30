@@ -16,6 +16,9 @@ import {
   findField,
   type Mark,
   type NewField,
+  type OutlineItem,
+  outlineOf,
+  setOutline,
   type Match,
   marksOn,
   movePages,
@@ -556,6 +559,59 @@ export const TOOLS: Tool[] = [
       const before = args.before === undefined ? null : pageAt(pdf, args.before).id;
       const next = movePages(pdf, ids, before);
       return { text: `Moved. The pages are now, by their old numbers: ${next.pages.map((p) => numberOf(pdf, p.id)).join(', ')}.`, pdf: next };
+    },
+  },
+  {
+    name: 'bookmarks',
+    title: 'Bookmarks',
+    writes: true,
+    description:
+      'The bookmarks of the PDF (its table of contents): lists them with their pages, adds one that leads to a page (at the end, or under another), renames one, or removes one. A bookmark goes by its number in the list, as "2" or "2.1" for the first under the second.',
+    properties: {
+      action: { type: 'string', enum: ['list', 'add', 'rename', 'remove'] },
+      title: { type: 'string', description: 'The name of the bookmark to add, or its new name.' },
+      page: { type: 'integer', minimum: 1, description: 'The page it leads to, when added.' },
+      bookmark: { type: 'string', description: 'The bookmark renamed or removed, or (when adding) the one it goes under, by its number: "2", "2.1".' },
+    },
+    required: ['action'],
+    async run(pdf, args) {
+      const items = structuredClone(await outlineOf(pdf));
+      const list = (entries: OutlineItem[], at: string): string[] =>
+        entries.flatMap((item, i) => [
+          `${'  '.repeat(at.split('.').length - 1)}${at}${i + 1}. ${item.title}${item.to ? ` (page ${numberOf(pdf, item.to.page)})` : ''}`,
+          ...list(item.items, `${at}${i + 1}.`),
+        ]);
+      if (args.action === 'list') return { text: items.length ? list(items, '').join('\n') : 'The PDF has no bookmarks.' };
+      const path = String(args.bookmark ?? '')
+        .split('.')
+        .filter(Boolean)
+        .map((n) => Number(n) - 1);
+      const at = (p: number[]) => {
+        let entries = items;
+        for (const i of p.slice(0, -1)) entries = entries[i]?.items ?? fail(`There is no bookmark ${args.bookmark}.`);
+        if (!entries[p[p.length - 1]]) fail(`There is no bookmark ${args.bookmark}.`);
+        return { entries, i: p[p.length - 1] };
+      };
+      if (args.action === 'add') {
+        const title = String(args.title ?? '').trim() || fail('Give the bookmark a title.');
+        const page = pageAt(pdf, args.page);
+        let entries = items;
+        if (path.length) {
+          const { entries: list, i } = at(path);
+          entries = list[i].items;
+        }
+        entries.push({ title, to: { page: page.id }, items: [] });
+        return { text: `Added the bookmark "${title}", to page ${numberOf(pdf, page.id)}.`, pdf: setOutline(pdf, items) };
+      }
+      if (!path.length) fail('Say which bookmark, by its number: "2", "2.1".');
+      const { entries, i } = at(path);
+      if (args.action === 'rename') {
+        const title = String(args.title ?? '').trim() || fail('Give the bookmark its new title.');
+        entries[i].title = title;
+        return { text: `Renamed bookmark ${args.bookmark} to "${title}".`, pdf: setOutline(pdf, items) };
+      }
+      const [gone] = entries.splice(i, 1);
+      return { text: `Removed the bookmark "${gone.title}"${gone.items.length ? ' and those under it' : ''}.`, pdf: setOutline(pdf, items) };
     },
   },
 ];

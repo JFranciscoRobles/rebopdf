@@ -52,3 +52,16 @@ Descargar más pequeño (en el menú ⋯) reduce el PDF: sus imágenes no más g
 Descargar como PDF/A (en el menú ⋯) hace un PDF/A-2B, como piden archivos y muchas oficinas guardar documentos: con todas las fuentes que usa dentro (las que solo nombra se toman de las que trae PDF.js, hechas a la medida de las estándar: Liberation Sans para Helvetica y Arial, las de Foxit para Times, Courier, Symbol y ZapfDingbats), sin nada que se ejecute, y con sus colores y metadatos como dice PDF/A. En código, `savePdf(pdf, { pdfa: true })` (o `'3B'`; es 3B por sí solo cuando el PDF trae archivos). En el navegador, las fuentes se descargan de la carpeta dada a `usePdfAssets`.
 
 Para asegurar que un archivo lo acepte, verifícalo con [veraPDF](https://verapdf.org/).
+
+## Marcadores y archivos adjuntos
+
+Junto a las páginas, Índice tiene los marcadores del PDF: en el editor, Añadir un marcador crea uno al lugar que se ve, con su nombre para escribirlo enseguida, y cada uno se puede renombrar, subir y bajar, poner bajo el anterior o sacar de él, y quitar. Archivos tiene los archivos que trae el PDF, cada uno para descargarlo: Adjuntar un archivo agrega más. En código:
+
+```ts
+import { setOutline, attachFile, detachFile, outlineOf } from '@rebopdf/core';
+
+let siguiente = setOutline(pdf, [{ title: 'Términos', to: { page: pdf.pages[1].id }, items: [] }]);
+siguiente = attachFile(siguiente, { name: 'cuentas.csv', data, mime: 'text/csv' });
+```
+
+Los marcadores llevan a las páginas como quedan al guardar; un PDF/A que trae archivos es PDF/A-3.

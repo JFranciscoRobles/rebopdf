@@ -6,6 +6,7 @@ import { PDFDocument } from '@cantoo/pdf-lib';
 import { openPdf, uid } from './open';
 import { type Field, type FieldKind, type Mark, type MarkPatch, type NewMark, type Page, type Pdf, PdfError, type Rect, type Word } from './types';
 import { writeDocument } from './writer';
+import type { OutlineItem } from './links';
 
 /** The page of this id. */
 export const pageById = (pdf: Pdf, id: string): Page | undefined => pdf.pages.find((page) => page.id === id);
@@ -90,6 +91,11 @@ export function insertPdf(pdf: Pdf, other: Pdf, at = pdf.pages.length): Pdf {
   const drawn = byFile(pdf.drawn, other.drawn);
   const taken = byFile(pdf.taken, other.taken);
   const signatures = [...(pdf.signatures ?? []), ...(other.signatures ?? []).map((s) => ({ ...s, source: renamed[s.source] }))];
+  // The files it carries come with it; its bookmarks too, when either was changed.
+  const attachments = other.attachments?.length ? [...(pdf.attachments ?? []).filter((a) => !other.attachments!.some((b) => b.name === a.name)), ...other.attachments] : pdf.attachments;
+  const remap = (items: OutlineItem[]): OutlineItem[] =>
+    items.map((item) => ({ title: item.title, ...(item.to ? { to: { ...item.to, page: pageIds[item.to.page] } } : {}), items: remap(item.items) }));
+  const outline = pdf.outline || other.outline ? [...(pdf.outline ?? []), ...remap(other.outline ?? [])] : undefined;
   return {
     ...pdf,
     sources,
@@ -100,6 +106,8 @@ export function insertPdf(pdf: Pdf, other: Pdf, at = pdf.pages.length): Pdf {
     ...(taken ? { taken } : {}),
     ...(signatures.length ? { signatures } : {}),
     ...(Object.keys(recognized).length ? { recognized } : {}),
+    ...(attachments ? { attachments } : {}),
+    ...(outline ? { outline } : {}),
   };
 }
 

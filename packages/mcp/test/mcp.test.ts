@@ -219,6 +219,30 @@ describe('the MCP server', () => {
     expect(text).toMatch(/- changed \(page 1\): "Contrato de servicios" → "Service agreement"/);
   });
 
+  it('changes bookmarks and the files a PDF carries, and saves it as PDF/A or with a password', async () => {
+    const { dir, call } = await setup();
+    await call('open_pdf', { file: 'contract.pdf' });
+    expect((await call('bookmarks', { action: 'list' })).text).toMatch(/^1\. The client \(page 1\)/);
+    expect((await call('bookmarks', { action: 'add', title: 'Firmas', page: 2 })).text).toBe('Added the bookmark "Firmas", to page 2.');
+    expect((await call('bookmarks', { action: 'rename', bookmark: '1', title: 'El cliente' })).text).toMatch(/Renamed bookmark 1/);
+    expect((await call('bookmarks', { action: 'remove', bookmark: '2' })).text).toMatch(/^Removed the bookmark "1\. The work"/);
+    await writeFile(join(dir, 'cuentas.csv'), 'a,b\n1,2\n');
+    expect((await call('attachments', { action: 'attach', file: 'cuentas.csv', description: 'Las cuentas' })).text).toMatch(/^Attached cuentas\.csv/);
+    expect((await call('attachments', { action: 'list' })).text).toBe('- cuentas.csv (1 KB): Las cuentas');
+    await call('save_pdf', { file: 'archived.pdf', pdfa: true });
+    const saved = await openPdf(new Uint8Array(await readFile(join(dir, 'archived.pdf'))));
+    expect(saved.attachments?.map((a) => a.name)).toEqual(['cuentas.csv']);
+    expect(new TextDecoder('latin1').decode(await readFile(join(dir, 'archived.pdf')))).toMatch(/pdfaid:part[^0-9]*3/);
+    await call('open_pdf', { file: 'archived.pdf' });
+    const list = (await call('bookmarks', { action: 'list' })).text.split('\n');
+    expect(list[0]).toBe('1. El cliente (page 1)');
+    expect(list.at(-1)).toBe('7. Firmas (page 2)');
+    expect((await call('attachments', { action: 'extract', name: 'cuentas.csv', file: 'out.csv' })).text).toMatch(/^Wrote cuentas\.csv/);
+    expect(await readFile(join(dir, 'out.csv'), 'utf8')).toBe('a,b\n1,2\n');
+    expect((await call('save_pdf', { file: 'locked.pdf', password: 'abre', no_copying: true })).text).toMatch(/encrypted: it opens only with the password/);
+    await expect(openPdf(new Uint8Array(await readFile(join(dir, 'locked.pdf'))))).rejects.toThrow();
+  }, 60_000);
+
   it('keeps to its folders', async () => {
     const { call } = await setup();
     const outside = await call('open_pdf', { file: '/etc/hosts' });

@@ -6,7 +6,22 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, extname, isAbsolute, join, relative, resolve } from 'node:path';
-import { addValidationData, checkSignatures, comparePdfs, extractPages, insertPdf, openPdf, type Pdf, PdfError, savePdf, savesIncrementally, signPdf, whyNotIncremental } from '@rebopdf/core';
+import {
+  addValidationData,
+  attachFile,
+  checkSignatures,
+  comparePdfs,
+  detachFile,
+  extractPages,
+  insertPdf,
+  openPdf,
+  type Pdf,
+  PdfError,
+  savePdf,
+  savesIncrementally,
+  signPdf,
+  whyNotIncremental,
+} from '@rebopdf/core';
 import { version } from '../package.json';
 import { type Files, findTool, pagesOf, type Tool, TOOLS, ToolError } from './tools';
 
@@ -88,6 +103,20 @@ const OWN: (Omit<Tool, 'run' | 'writes'> & { annotations: Record<string, boolean
     description: 'Writes some pages of the PDF, with what is on them, as a PDF of their own. The PDF open stays as it is.',
     properties: { document: DOCUMENT, pages: { type: 'string', description: 'Pages by number: "3", "1,3-5".' }, file: { type: 'string', description: 'Where to write the new PDF.' } },
     required: ['pages', 'file'],
+  },
+  {
+    name: 'attachments',
+    title: 'Files carried',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    description: 'The files a PDF carries (attachments): lists them, attaches a file of the disk, takes one off, or writes one to the disk. Changes are saved with save_pdf.',
+    properties: {
+      document: DOCUMENT,
+      action: { type: 'string', enum: ['list', 'attach', 'detach', 'extract'] },
+      file: { type: 'string', description: 'With attach: the path of the file to attach. With extract: where to write it.' },
+      name: { type: 'string', description: 'With detach and extract: the name of the file carried. With attach: a name for it, other than its own.' },
+      description: { type: 'string', description: 'With attach: what the file is.' },
+    },
+    required: ['action'],
   },
   {
     name: 'sign_digitally',
@@ -272,6 +301,30 @@ export function createPdfServer(options: ServerOptions = {}) {
         if (extname(target).toLowerCase() !== '.pdf') throw new ToolError('Write it to a file that ends in .pdf.');
         await writeFile(target, await savePdf(extractPages(doc.pdf, ids, basename(target)), { font: await fontBytes() }));
         return `Wrote ${ids.length} ${ids.length === 1 ? 'page' : 'pages'} to ${target}.`;
+      }
+      case 'attachments': {
+        const doc = document(args.document);
+        const files = doc.pdf.attachments ?? [];
+        const size = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+        if (args.action === 'list')
+          return files.length ? files.map((f) => `- ${f.name} (${size(f.data.length)}${f.mime ? `, ${f.mime}` : ''})${f.description ? `: ${f.description}` : ''}`).join('\n') : 'It carries no files.';
+        if (args.action === 'attach') {
+          const full = allowed(String(args.file ?? ''));
+          const data = new Uint8Array(await readFile(full));
+          const name = String(args.name ?? basename(full));
+          change(doc, attachFile(doc.pdf, { name, data, ...(args.description ? { description: String(args.description) } : {}) }));
+          return `Attached ${name} (${size(data.length)}). Save with save_pdf to keep it.`;
+        }
+        const name = String(args.name ?? '');
+        const file = files.find((f) => f.name === name);
+        if (!file) throw new ToolError(`It carries no file ${name}: ${files.map((f) => f.name).join(', ') || 'none'}.`);
+        if (args.action === 'detach') {
+          change(doc, detachFile(doc.pdf, name));
+          return `Took ${name} off. Save with save_pdf to keep it so.`;
+        }
+        const target = allowed(String(args.file ?? name));
+        await writeFile(target, file.data);
+        return `Wrote ${name} to ${target}.`;
       }
       case 'sign_digitally': {
         const doc = document(args.document);
