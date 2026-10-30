@@ -32,6 +32,8 @@ import {
   savePdf,
   type SignatureCheck,
   signPdf,
+  addValidationData,
+  authorityAt,
   checkSignatures,
   savesIncrementally,
   whyNotIncremental,
@@ -71,6 +73,12 @@ export interface EditorOptions {
    * offer Recognize text in the menu. Without it, the menu has it not.
    */
   recognize?: (pdf: Pdf, options: { onProgress?: (done: number, total: number) => void; languages?: string[] }) => Promise<Pdf>;
+  /**
+   * Signing digitally: the time-stamping authority the dialog offers, and what
+   * asks it and the authorities of certificates (a fetch through a server of
+   * the application's, as most do not answer pages of other sites).
+   */
+  signing?: { timestamp?: string; fetch?: typeof fetch };
   /** Items of the application's own in the menu of the editor, after its own. */
   menu?: { icon: IconName; label: string; hint?: string; run: () => void }[];
   /** Given the bytes of the PDF when Save is pressed. Without it, the button downloads the PDF. */
@@ -361,11 +369,14 @@ export class Editor {
     const pdf = this.current;
     if (!pdf || !this.viewer) return;
     const fields = pdf.fields.filter((f) => f.kind === 'signature').map((f) => f.name);
-    const asked = await askCertificate(this.viewer.root, this.t, fields);
+    const asked = await askCertificate(this.viewer.root, this.t, fields, this.options.signing?.timestamp);
     if (!asked) return;
+    const { timestamp, longTerm, ...certificate } = asked;
+    const fetcher = this.options.signing?.fetch;
     let bytes: Uint8Array;
     try {
-      bytes = await signPdf(pdf, { ...asked, font: this.options.font });
+      bytes = await signPdf(pdf, { ...certificate, font: this.options.font, ...(timestamp ? { timestamp: authorityAt(timestamp, fetcher) } : {}) });
+      if (longTerm) bytes = await addValidationData(bytes, fetcher ? { fetch: fetcher } : {});
     } catch (error) {
       this.toast(error instanceof Error ? error.message : String(error));
       return;
@@ -375,7 +386,12 @@ export class Editor {
     const signed = await openPdf(bytes, { name: pdf.name });
     this.setPdf(signed);
     const last = signed.signatures?.at(-1);
-    this.toast(fill(this.t.signedDigitally, { name: last?.name ?? this.t.someone }));
+    const [check] = timestamp ? (await checkSignatures(bytes)).filter((c) => c.kind === 'signature').slice(-1) : [];
+    this.toast(
+      check?.timestamp
+        ? fill(this.t.signedTimestamped, { name: last?.name ?? this.t.someone, authority: check.timestamp.authority ?? '' })
+        : fill(this.t.signedDigitally, { name: last?.name ?? this.t.someone }),
+    );
   }
 
   private listen(target: EventTarget, type: string, handler: (event: Event) => void) {

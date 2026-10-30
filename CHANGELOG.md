@@ -106,6 +106,19 @@ The first version to go to npm: 0.1.0 never went, and what it has is here.
   their square: big PDFs were written unpacked, a sixth bigger); and what
   changed, added after a file, in a table of places or a stream as the file
   has its own. pdf-lib still reads PDFs and holds their objects.
+- **Signatures that hold in law and in time**: signatures are PAdES now
+  (`format: 'pkcs7'` for the old kind); `timestamp` of `signPdf` has a
+  time-stamping authority (RFC 3161) vouch for when it was signed;
+  `addValidationData` puts in the file the chain of each certificate and
+  whether it was revoked, as OCSP answers and CRLs ask (PAdES LT);
+  `timestampPdf` time-stamps the whole file (PAdES LTA). `checkSignatures`
+  says the time-stamp, the chain, whether a certificate was revoked,
+  whether the file carries what checks it for years, and, given the
+  authorities to trust (`trusted`), whether to trust it. It checks keys of
+  RSA (PKCS #1 and PSS) and of elliptic curves with Web Crypto, as
+  authorities sign with. In the editor, Sign digitally has a field for the
+  authority (`signing.timestamp`) and a box to keep what checks it; in the
+  MCP server, `timestamp`, `long_term` and `trusted`.
 - Recognizing text reads again, each on its own, the strips of a page with
   ink and no word read: a big title the layout of the whole page leaves
   out, as under a dark band, is read.

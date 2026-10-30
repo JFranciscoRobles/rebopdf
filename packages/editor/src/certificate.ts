@@ -7,10 +7,14 @@ import type { SignOptions } from '@rebopdf/core';
 import { makeOption } from '@rebopdf/viewer';
 import type { EditorStrings } from './i18n';
 
-export type Certificate = Pick<SignOptions, 'p12' | 'certificate' | 'key' | 'password' | 'reason' | 'field'>;
+export type Certificate = Pick<SignOptions, 'p12' | 'certificate' | 'key' | 'password' | 'reason' | 'field'> & {
+  /** The address of a time-stamping authority, and whether to keep in the file what checks it in the long term. */
+  timestamp?: string;
+  longTerm?: boolean;
+};
 
 /** Asks for a certificate to sign with; nothing when the dialog is closed without one. */
-export function askCertificate(host: HTMLElement, t: EditorStrings, fields: string[]): Promise<Certificate | null> {
+export function askCertificate(host: HTMLElement, t: EditorStrings, fields: string[], authority = ''): Promise<Certificate | null> {
   const doc = host.ownerDocument;
   const opener = doc.activeElement as HTMLElement | null;
   const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') => {
@@ -48,6 +52,15 @@ export function askCertificate(host: HTMLElement, t: EditorStrings, fields: stri
     where.append(makeOption(doc, t.signatureNotSeen, ''));
     for (const name of fields) where.append(makeOption(doc, name));
     if (fields.length) where.value = fields[0];
+    const stamp = el('input', 'rp-input');
+    stamp.type = 'url';
+    stamp.value = authority;
+    stamp.placeholder = 'https://';
+    stamp.title = t.timestampHint;
+    const longTerm = el('input');
+    longTerm.type = 'checkbox';
+    const keep = el('label', 'rp-dialog-check');
+    keep.append(longTerm, el('span', '', t.longTerm));
     const problem = el('p', 'rp-dialog-problem');
     problem.setAttribute('role', 'alert');
 
@@ -59,7 +72,7 @@ export function askCertificate(host: HTMLElement, t: EditorStrings, fields: stri
     actions.append(cancel, sign);
     dialog.append(title, hint, labelled(t.certificateFiles, files), labelled(t.certificatePassword, password), labelled(t.reason, reason));
     if (fields.length) dialog.append(labelled(t.signIn, where));
-    dialog.append(problem, actions);
+    dialog.append(labelled(t.timestampAuthority, stamp), keep, problem, actions);
     back.append(dialog);
     host.append(back);
 
@@ -88,7 +101,14 @@ export function askCertificate(host: HTMLElement, t: EditorStrings, fields: stri
         problem.textContent = t.certificateMissing;
         return;
       }
-      close({ ...(p12 ? { p12 } : { certificate, key }), password: password.value, ...(reason.value.trim() ? { reason: reason.value.trim() } : {}), ...(where.value ? { field: where.value } : {}) });
+      close({
+        ...(p12 ? { p12 } : { certificate, key }),
+        password: password.value,
+        ...(reason.value.trim() ? { reason: reason.value.trim() } : {}),
+        ...(where.value ? { field: where.value } : {}),
+        ...(stamp.value.trim() ? { timestamp: stamp.value.trim() } : {}),
+        ...(longTerm.checked ? { longTerm: true } : {}),
+      });
     });
     files.focus();
   });

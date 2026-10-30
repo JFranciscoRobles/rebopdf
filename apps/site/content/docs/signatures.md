@@ -16,19 +16,47 @@ const signed = await signPdf(pdf, { p12, password, reason: 'I agree', field: 'Cl
 const signed2 = await signPdf(pdf, { certificate: cer, key, password });
 ```
 
-The signature is a PKCS #7 one, detached, with SHA-256, as Acrobat and every reader of signatures checks them. It goes in a signature field of the PDF (seen in its box with who signed and when), or in one not seen. RSA keys only. The certificate never leaves the browser.
+The signature is a PAdES one (CAdES, detached, with SHA-256), as Acrobat and every reader of signatures checks them; `format: 'pkcs7'` makes it as readers before 2009 read them. It goes in a signature field of the PDF (seen in its box with who signed and when), or in one not seen. RSA keys to sign with. The certificate never leaves the browser.
+
+## When it was signed, vouched for
+
+A time-stamping authority (RFC 3161) vouches for when it was signed, so the time is not only what the signer's computer said:
+
+```ts
+const signed = await signPdf(pdf, { p12, password, timestamp: 'https://freetsa.org/tsr' });
+```
+
+`timestamp` is the address of the authority, or a function given what to ask that gives what it answers. Most authorities do not answer pages of other sites: in the browser, ask through a server of yours (the editor takes `signing: { timestamp, fetch }` for it).
+
+## Signatures that hold for years
+
+A certificate expires and may be revoked; years after, what proves it was good when the PDF was signed has to be in the file. `addValidationData` puts it there (PAdES LT): the chain of each certificate, and whether each was revoked, as its authority answers (OCSP) or lists (CRL), asked at the addresses the certificate gives. `timestampPdf` then time-stamps the whole file (PAdES LTA), which keeps all of it checkable after the certificates expire:
+
+```ts
+import { addValidationData, timestampPdf } from '@rebopdf/core';
+
+let bytes = await signPdf(pdf, { p12, password, timestamp: tsa });
+bytes = await addValidationData(bytes);
+bytes = await timestampPdf(bytes, { timestamp: tsa });
+```
+
+In the editor, Sign digitally has a field for the authority and a box to keep what checks it.
 
 ## Signatures checked
 
 ```ts
-for (const check of await checkSignatures(bytes)) {
-  check.intact; // what it signed is as it was signed, and its key made it
-  check.whole;  // it signed the whole file: nothing was added after it
-  check.signer; check.issuer; check.date;
+for (const check of await checkSignatures(bytes, { trusted: [satRoot] })) {
+  check.intact;     // what it signed is as it was signed, and its key made it
+  check.whole;      // it signed the whole file: nothing was added after it
+  check.timestamp;  // when an authority vouches it was signed
+  check.chain;      // its certificates, from the signer's up
+  check.revocation; // 'good', 'revoked' or 'unknown', as the file says
+  check.longTerm;   // the file carries what checks it for years
+  check.trusted;    // given who to trust: its chain ends in one of them
 }
 ```
 
-Who to trust is a reader's to say: the authorities that gave the certificates are not checked.
+Who to trust is yours to give: the certificates of the authorities (for e.firma, the SAT's, which it publishes). Keys of RSA (PKCS #1 and PSS) and of elliptic curves are checked, with the Web Crypto of the browser or of Node.
 
 ## Signed PDFs stay signed
 

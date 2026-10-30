@@ -77,6 +77,8 @@ const CSS = `
 .rp-typed { display: grid; place-items: center; height: 120px; border: 1px solid var(--rp-border-strong); border-radius: 10px; background: #fff; color: #0b1f4d; font: 44px/1.2 "Segoe Script", "Snell Roundhand", "Brush Script MT", "Apple Chancery", cursive; overflow: hidden; white-space: nowrap; }
 .rp-dialog .rp-input { width: 100%; height: 36px; }
 .rp-dialog-field { display: grid; gap: 6px; color: var(--rp-muted); font-size: 12.5px; }
+.rp-dialog-check { display: flex; gap: 8px; align-items: flex-start; color: var(--rp-muted); font-size: 12.5px; line-height: 1.4; }
+.rp-dialog-check input { margin-top: 2px; }
 .rp-dialog-problem { margin: 0; min-height: 1em; color: #c92a2a; font-size: 13px; }
 .rp-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .rp-upload-preview { display: grid; place-items: center; height: 140px; border: 1px dashed var(--rp-border-strong); border-radius: 10px; background: #fff; }

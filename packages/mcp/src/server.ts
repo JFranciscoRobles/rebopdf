@@ -6,7 +6,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, extname, isAbsolute, join, relative, resolve } from 'node:path';
-import { checkSignatures, comparePdfs, extractPages, insertPdf, openPdf, type Pdf, PdfError, savePdf, savesIncrementally, signPdf, whyNotIncremental } from '@rebopdf/core';
+import { addValidationData, checkSignatures, comparePdfs, extractPages, insertPdf, openPdf, type Pdf, PdfError, savePdf, savesIncrementally, signPdf, whyNotIncremental } from '@rebopdf/core';
 import { version } from '../package.json';
 import { type Files, findTool, pagesOf, type Tool, TOOLS, ToolError } from './tools';
 
@@ -96,6 +96,11 @@ const OWN: (Omit<Tool, 'run' | 'writes'> & { annotations: Record<string, boolean
       field: { type: 'string', description: 'A signature field of the PDF to sign in (list_fields gives them). Left out, the signature is not seen on the pages.' },
       reason: { type: 'string', description: 'Why it is signed.' },
       location: { type: 'string', description: 'Where it is signed.' },
+      timestamp: { type: 'string', description: 'The address of a time-stamping authority (RFC 3161), as https://freetsa.org/tsr, to vouch for when it was signed.' },
+      long_term: {
+        type: 'boolean',
+        description: 'Also put in the file what checks the signature for years: the chain of its certificate and whether each was revoked, asked of their authorities (PAdES LT).',
+      },
       file: { type: 'string', description: 'Where to write it signed.' },
     },
     required: ['certificate', 'password'],
@@ -114,8 +119,11 @@ const OWN: (Omit<Tool, 'run' | 'writes'> & { annotations: Record<string, boolean
     title: 'Check signatures',
     annotations: { readOnlyHint: true },
     description:
-      'Checks the digital signatures of a PDF: whether what each signed is as it was signed, who signed and when, who gave the certificate, and whether the file was added to after. Not whether to trust who gave the certificate: a reader that knows the authorities says that.',
-    properties: { file: { type: 'string', description: 'The path of a PDF; left out, the one open as it was opened.' } },
+      "Checks the digital signatures of a PDF: whether what each signed is as it was signed, who signed and when (and which authority vouches for when), who gave the certificate and its chain, whether the file says a certificate was revoked, and whether the file was added to after. Given the certificates of the authorities to trust (as the SAT's for e.firma), whether to trust each signature.",
+    properties: {
+      file: { type: 'string', description: 'The path of a PDF; left out, the one open as it was opened.' },
+      trusted: { type: 'array', items: { type: 'string' }, description: 'Paths of the certificates (.cer, .crt, .pem) of the authorities to trust.' },
+    },
   },
   {
     name: 'undo',
@@ -268,8 +276,10 @@ export function createPdfServer(options: ServerOptions = {}) {
             ...(args.field ? { field: String(args.field) } : {}),
             ...(args.reason ? { reason: String(args.reason) } : {}),
             ...(args.location ? { location: String(args.location) } : {}),
+            ...(args.timestamp ? { timestamp: String(args.timestamp) } : {}),
             font: await fontBytes(),
           });
+          if (args.long_term) bytes = await addValidationData(bytes);
         } catch (error) {
           throw new ToolError(error instanceof Error ? error.message : String(error));
         }
@@ -279,8 +289,13 @@ export function createPdfServer(options: ServerOptions = {}) {
         doc.history.push(doc.pdf);
         doc.pdf = await openPdf(bytes, { name: basename(target) });
         doc.unsaved = target !== doc.file;
-        const [check] = (await checkSignatures(bytes)).slice(-1);
-        return `Signed by ${check?.signer ?? 'the certificate'} and wrote ${target}.${check?.intact ? ' The signature checks: what was signed is as it was signed.' : ''}`;
+        const [check] = (await checkSignatures(bytes)).filter((c) => c.kind === 'signature').slice(-1);
+        const notes = [
+          check?.intact && 'The signature checks: what was signed is as it was signed.',
+          check?.timestamp && `${check.timestamp.authority ?? 'The authority'} vouches it was signed at ${check.timestamp.date}.`,
+          args.long_term && (check?.longTerm ? 'What checks it in the long term is in the file.' : 'Not all of what checks it in the long term could be had: some authority did not answer.'),
+        ].filter(Boolean);
+        return `Signed by ${check?.signer ?? 'the certificate'} and wrote ${target}.${notes.length ? ` ${notes.join(' ')}` : ''}`;
       }
       case 'compare_pdfs': {
         const doc = document(args.document);
@@ -305,12 +320,20 @@ export function createPdfServer(options: ServerOptions = {}) {
               const doc = document(undefined);
               return doc.pdf.sources[doc.pdf.pages[0].source];
             })();
-        const checks = await checkSignatures(bytes);
+        const trusted = Array.isArray(args.trusted) ? await Promise.all(args.trusted.map(async (path) => new Uint8Array(await readFile(allowed(String(path)))))) : undefined;
+        const checks = await checkSignatures(bytes, { trusted });
         if (!checks.length) return 'It has no digital signatures.';
         return checks
           .map((c) => {
             const state = !c.intact ? `does NOT hold: ${c.problem}` : c.whole ? 'holds: the file is as it was signed' : 'holds for what it signed: the file was added to after';
-            return `- ${c.field}: ${c.signer ?? c.name ?? 'someone'}${c.date ? `, ${c.date.slice(0, 10)}` : ''}${c.reason ? ` ("${c.reason}")` : ''}, certificate by ${c.issuer ?? 'unknown'} — ${state}.`;
+            const what = c.kind === 'timestamp' ? `time-stamp of the whole file by ${c.signer ?? 'an authority'}` : `${c.signer ?? c.name ?? 'someone'}`;
+            const more = [
+              c.timestamp && `time-stamped by ${c.timestamp.authority ?? 'an authority'}${c.timestamp.intact ? '' : ' (the time-stamp does NOT hold)'}`,
+              c.chain.length > 1 && `chain: ${c.chain.join(' → ')}`,
+              c.revocation === 'revoked' ? 'a certificate of its chain was REVOKED' : c.longTerm ? 'the file says its certificates were not revoked' : '',
+              c.trusted === true ? 'trusted' : c.trusted === false ? `NOT trusted: ${c.problem}` : '',
+            ].filter(Boolean);
+            return `- ${c.field}: ${what}${c.date ? `, ${c.date.slice(0, 10)}` : ''}${c.reason ? ` ("${c.reason}")` : ''}, certificate by ${c.issuer ?? 'unknown'} — ${state}${more.length ? `; ${more.join('; ')}` : ''}.`;
           })
           .join('\n');
       }
