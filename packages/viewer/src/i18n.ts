@@ -3,6 +3,9 @@
 const en = {
   viewer: 'PDF viewer',
   pages: 'Pages',
+  contents: 'Contents',
+  goToPage: 'Go to page {n}',
+  sectionsOf: 'Sections of {title}',
   showPages: 'Show pages',
   hidePages: 'Hide pages',
   page: 'Page',
@@ -35,6 +38,9 @@ export type Strings = typeof en;
 const es: Strings = {
   viewer: 'Visor de PDF',
   pages: 'Páginas',
+  contents: 'Índice',
+  goToPage: 'Ir a la página {n}',
+  sectionsOf: 'Apartados de {title}',
   showPages: 'Mostrar páginas',
   hidePages: 'Ocultar páginas',
   page: 'Página',

@@ -120,7 +120,7 @@ test('notes, ink, text and a signature go on the pages', async ({ page }) => {
 
   const { bytes, pdf } = await downloaded(page);
   const reader = await readerOf(bytes);
-  expect((await (await reader.getPage(1)).getAnnotations()).map((a) => a.subtype).filter((s) => s !== 'Widget')).toEqual(['Text', 'Ink']);
+  expect((await (await reader.getPage(1)).getAnnotations()).map((a) => a.subtype).filter((s) => s !== 'Widget' && s !== 'Link')).toEqual(['Text', 'Ink']);
   const { pageText } = await import('@rebopdf/core');
   expect((await pageText(pdf, pdf.pages[0].id)).text).toContain('Received 29 Oct');
 });
@@ -335,4 +335,23 @@ test('a PDF with a password is asked for it, opened, and its pages drawn', async
   await page.getByRole('textbox', { name: 'Nombre completo' }).fill('Luis');
   const { pdf } = await downloaded(page);
   expect(pdf.fields.find((f) => f.name === 'client.name')?.value).toBe('Luis');
+});
+
+test('links lead to their place, and the table of contents to each section', async ({ page }) => {
+  await expect(page.getByRole('tab', { name: 'Contents' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Contents' }).click();
+  await page.getByRole('button', { name: '4. Ownership' }).click();
+  await expect(page.getByRole('textbox', { name: 'Page number' })).toHaveValue('2');
+  await page.getByRole('tab', { name: 'Pages' }).click();
+  await page.locator('.rp-thumb').first().click();
+  await expect(page.getByRole('textbox', { name: 'Page number' })).toHaveValue('1');
+  await page.getByRole('link', { name: 'Go to page 2' }).click();
+  await expect(page.getByRole('textbox', { name: 'Page number' })).toHaveValue('2');
+  const web = page.getByRole('link', { name: 'https://github.com/JFranciscoRobles/rebopdf' });
+  await expect(web).toHaveAttribute('target', '_blank');
+  await expect(web).toHaveAttribute('rel', 'noopener noreferrer');
+  // A tool that draws on the page is not taken by a link under it.
+  await page.locator('.rp-scroll').focus();
+  await page.keyboard.press('d');
+  await expect(web).toBeHidden();
 });

@@ -5,7 +5,25 @@
 // It is given a Pdf, and given it again as it changes: the pages already
 // drawn stay as they are.
 
-import { type Field, type Match, marksOn, type Page, type Pdf, pageNumber, pageSize, pdfjs, readerOf, savePdf, searchPdf, setField } from '@rebopdf/core';
+import {
+  type Field,
+  linksOf,
+  type Match,
+  marksOn,
+  type OutlineItem,
+  outlineOf,
+  type Page,
+  type PageLink,
+  type Pdf,
+  type Place,
+  pageNumber,
+  pageSize,
+  pdfjs,
+  readerOf,
+  savePdf,
+  searchPdf,
+  setField,
+} from '@rebopdf/core';
 import { fill, type Strings, stringsFor } from './i18n';
 import { type IconName, icon } from './icons';
 import { type Geometry, geometryOf, makeOption, renderFields, renderMarks } from './layers';
@@ -52,6 +70,10 @@ export interface PageView {
   hits: HTMLElement;
   marks: HTMLElement;
   fields: HTMLElement;
+  links: HTMLElement;
+  /** The links of the page, once read, and of which page of which file they were read. */
+  linkData?: PageLink[];
+  linksOf?: string;
   geo: Geometry;
   /** What it was drawn as: its file, its place, how it is turned and how big. */
   drawn?: string;
@@ -78,6 +100,11 @@ export class Viewer {
   private doc: Document;
   private side: HTMLElement;
   private thumbs: HTMLOListElement;
+  private heading: HTMLElement;
+  private tabs: HTMLElement;
+  private outlineEl: HTMLElement;
+  /** The files the outline was read from, in their order. */
+  private outlineSources = '';
   private sideButton?: HTMLButtonElement;
   private titleEl: HTMLElement;
   private pageInput: HTMLInputElement;
@@ -186,14 +213,38 @@ export class Viewer {
     this.side = make('nav', 'rp-side');
     this.side.setAttribute('aria-label', t.pages);
     const head = make('div', 'rp-side-head');
-    const heading = make('span');
-    heading.textContent = t.pages;
-    head.append(heading, this.slots.side);
+    this.heading = make('span');
+    this.heading.textContent = t.pages;
+    // Pages and contents, when the PDF has a table of contents.
+    this.tabs = make('div', 'rp-side-tabs');
+    this.tabs.setAttribute('role', 'tablist');
+    this.tabs.hidden = true;
+    const tab = (label: string, panel: 'pages' | 'contents') => {
+      const b = make('button', 'rp-side-tab');
+      b.type = 'button';
+      b.textContent = label;
+      b.setAttribute('role', 'tab');
+      b.dataset.panel = panel;
+      b.addEventListener('click', () => this.showPanel(panel));
+      b.addEventListener('keydown', (event) => {
+        if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+        event.preventDefault();
+        const other = panel === 'pages' ? 'contents' : 'pages';
+        this.showPanel(other);
+        this.tabs.querySelector<HTMLElement>(`[data-panel="${other}"]`)?.focus();
+      });
+      return b;
+    };
+    this.tabs.append(tab(t.pages, 'pages'), tab(t.contents, 'contents'));
+    head.append(this.heading, this.tabs, this.slots.side);
+    this.outlineEl = make('div', 'rp-outline');
+    this.outlineEl.setAttribute('role', 'tabpanel');
+    this.outlineEl.hidden = true;
     this.thumbs = make('ol', 'rp-thumbs');
     this.thumbs.setAttribute('role', 'listbox');
     this.thumbs.setAttribute('aria-label', t.pages);
     if (options.decorateThumb) this.thumbs.setAttribute('aria-multiselectable', 'true');
-    this.side.append(head, this.thumbs);
+    this.side.append(head, this.thumbs, this.outlineEl);
     this.side.hidden = true;
 
     // The pages.
@@ -406,9 +457,10 @@ export class Viewer {
       const text = layer('textLayer');
       const hits = layer('rp-hits');
       const marks = layer('rp-marks');
+      const links = layer('rp-links');
       const fields = layer('rp-fields');
-      el.append(canvas, text, hits, marks, fields);
-      this.views.set(page.id, { page, el, canvas, text, hits, marks, fields, geo: geometryOf(page, this.scale) });
+      el.append(canvas, text, hits, links, marks, fields);
+      this.views.set(page.id, { page, el, canvas, text, hits, marks, fields, links, geo: geometryOf(page, this.scale) });
       this.observer.observe(el);
     }
     this.pagesEl.replaceChildren(...this.pdf.pages.map((page) => this.views.get(page.id)!.el));
@@ -417,6 +469,11 @@ export class Viewer {
     this.titleEl.textContent = this.pdf.name.replace(/\.pdf$/i, '');
     this.titleEl.title = this.pdf.name;
     this.buildThumbs();
+    const sources = [...new Set(this.pdf.pages.map((p) => p.source))].join(',');
+    if (sources !== this.outlineSources) {
+      this.outlineSources = sources;
+      void this.buildOutline();
+    } else if (this.outlineEl.childElementCount) void this.buildOutline();
     if (!this.views.has(this.current)) this.current = '';
   }
 
@@ -542,6 +599,7 @@ export class Viewer {
 
   /** @internal */
   overlay(view: PageView) {
+    this.drawLinks(view);
     renderMarks(view.marks, marksOn(this.pdf, view.page.id), view.geo, this.t);
     renderFields(view.fields, this.pdf.fields, view.page.id, view.geo, {
       editable: this.options.fill !== false,
@@ -629,6 +687,13 @@ export class Viewer {
       view.text.replaceWith(text);
       view.text = text;
       view.drawn = key;
+      // Its links, read once for each page of each file.
+      const of = `${page.source}:${page.index}`;
+      if (view.linksOf !== of) {
+        view.linkData = await linksOf(this.pdf, page.id).catch(() => []);
+        view.linksOf = of;
+        this.drawLinks(view);
+      }
     } catch (error) {
       if ((error as Error)?.name === 'RenderingCancelledException') return;
       if (!view.el.querySelector('.rp-page-state')) {
@@ -641,6 +706,112 @@ export class Viewer {
     } finally {
       view.drawing = undefined;
     }
+  }
+
+  /** Lays the links of a page over it: an address of the web opens apart, a place of the PDF is gone to. */
+  private drawLinks(view: PageView) {
+    view.links.replaceChildren(
+      ...(view.linkData ?? []).map((link) => {
+        const a = this.doc.createElement('a');
+        a.className = 'rp-link';
+        const s = view.geo.toScreenRect(link.rect);
+        Object.assign(a.style, { left: `${s.x}px`, top: `${s.y}px`, width: `${s.width}px`, height: `${s.height}px` });
+        if (link.url) {
+          a.href = link.url;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          a.setAttribute('aria-label', link.url);
+          a.title = link.url;
+        } else if (link.to) {
+          const to = link.to;
+          a.href = '#';
+          const n = pageNumber(this.pdf, to.page);
+          a.setAttribute('aria-label', fill(this.t.goToPage, { n }));
+          a.title = fill(this.t.goToPage, { n });
+          a.addEventListener('click', (event) => {
+            event.preventDefault();
+            this.goToPlace(to);
+          });
+        }
+        return a;
+      }),
+    );
+  }
+
+  /** Brings a place of the PDF into view: its page, at its height when the PDF says it. */
+  goToPlace(place: Place): void {
+    const view = this.views.get(place.page);
+    if (!view) return;
+    const y = place.top === undefined ? 0 : Math.max(0, view.geo.toScreen({ x: view.page.box.x, y: place.top }).y - 8);
+    this.goTo(place.page, { y });
+  }
+
+  private showPanel(panel: 'pages' | 'contents') {
+    const contents = panel === 'contents';
+    this.thumbs.hidden = contents;
+    this.outlineEl.hidden = !contents;
+    this.slots.side.hidden = contents;
+    for (const b of this.tabs.querySelectorAll<HTMLElement>('[role="tab"]')) {
+      const on = b.dataset.panel === panel;
+      b.setAttribute('aria-selected', String(on));
+      b.tabIndex = on ? 0 : -1;
+    }
+  }
+
+  /** The table of contents, a tab beside the pages when the PDF has one. */
+  private async buildOutline() {
+    const items = await outlineOf(this.pdf).catch(() => [] as OutlineItem[]);
+    const has = items.length > 0;
+    this.tabs.hidden = !has;
+    this.heading.hidden = has;
+    if (!has) {
+      this.outlineEl.replaceChildren();
+      this.showPanel('pages');
+      return;
+    }
+    const list = (entries: OutlineItem[], depth: number): HTMLUListElement => {
+      const ul = this.doc.createElement('ul');
+      for (const item of entries) {
+        const li = this.doc.createElement('li');
+        const row = this.doc.createElement('div');
+        row.className = 'rp-outline-row';
+        row.style.setProperty('--depth', String(depth));
+        const go = this.doc.createElement('button');
+        go.type = 'button';
+        go.className = 'rp-outline-item';
+        go.textContent = item.title;
+        go.disabled = !item.to;
+        go.addEventListener('click', () => {
+          if (!item.to) return;
+          this.goToPlace(item.to);
+          if (this.doc.defaultView?.matchMedia('(max-width: 640px)').matches) this.toggleThumbnails(false);
+        });
+        if (item.items.length) {
+          const inner = list(item.items, depth + 1);
+          inner.hidden = depth > 0;
+          const toggle = this.doc.createElement('button');
+          toggle.type = 'button';
+          toggle.className = 'rp-outline-toggle';
+          toggle.setAttribute('aria-expanded', String(!inner.hidden));
+          toggle.setAttribute('aria-label', fill(this.t.sectionsOf, { title: item.title }));
+          toggle.append(icon(this.doc, 'chevronRight', 14));
+          toggle.addEventListener('click', () => {
+            inner.hidden = !inner.hidden;
+            toggle.setAttribute('aria-expanded', String(!inner.hidden));
+          });
+          row.append(toggle, go);
+          li.append(row, inner);
+        } else {
+          row.append(go);
+          li.append(row);
+        }
+        ul.append(li);
+      }
+      return ul;
+    };
+    this.outlineEl.replaceChildren(list(items, 0));
+    if (!this.outlineEl.hidden || this.thumbs.hidden) this.showPanel('contents');
+    else this.showPanel('pages');
   }
 
   /** Follows the page in view as the pages scroll. */

@@ -21,6 +21,7 @@ export {
   setField,
   updateMark,
 } from './edit';
+export { linksOf, type OutlineItem, outlineOf, type PageLink, type Place } from './links';
 export { type OpenOptions, openPdf } from './open';
 export { type PdfJsDocument, pdfjs, readerOf, usePdfAssets, usePdfWorker } from './pdfjs';
 export { samplePdf, samplePdfBytes } from './sample';

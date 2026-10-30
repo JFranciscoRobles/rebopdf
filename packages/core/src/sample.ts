@@ -3,7 +3,7 @@
 // buttons), clauses to read, highlight and search, and lines to sign on.
 // Made here with pdf-lib, the same every time.
 
-import { PDFDocument, type PDFFont, PDFHexString, PDFName, type PDFPage, StandardFonts, rgb } from '@cantoo/pdf-lib';
+import { PDFDocument, type PDFFont, PDFHexString, PDFName, PDFNull, type PDFPage, PDFString, StandardFonts, rgb } from '@cantoo/pdf-lib';
 import { openPdf } from './open';
 import { wrap } from './save';
 import type { Pdf } from './types';
@@ -35,6 +35,8 @@ const TEXT = {
     clientSign: 'The client',
     providerSign: 'For Rebo Studio',
     page: 'Page',
+    seeEnding: 'Either party may end it: see clause 5, on page 2.',
+    contact: 'Questions about this agreement: github.com/JFranciscoRobles/rebopdf',
   },
   es: {
     file: 'Contrato de servicios.pdf',
@@ -69,6 +71,8 @@ const TEXT = {
     clientSign: 'El cliente',
     providerSign: 'Por Rebo Studio',
     page: 'Página',
+    seeEnding: 'Cualquiera de las partes puede terminarlo: ver la cláusula 5, en la página 2.',
+    contact: 'Dudas sobre este contrato: github.com/JFranciscoRobles/rebopdf',
   },
 };
 
@@ -93,6 +97,8 @@ export async function samplePdfBytes(locale: 'en' | 'es' = 'en'): Promise<Uint8A
   doc.setCreationDate(fixed);
   doc.setModificationDate(fixed);
   const form = doc.getForm();
+  /** The headings, for the table of contents. */
+  const places: { title: string; page: PDFPage; y: number }[] = [];
 
   const paragraph = (page: PDFPage, text: string, y: number, font: PDFFont = regular, size = 10.5) => {
     const lines = wrap(text, WIDTH - MARGIN * 2, (line) => font.widthOfTextAtSize(line, size));
@@ -119,6 +125,7 @@ export async function samplePdfBytes(locale: 'en' | 'es' = 'en'): Promise<Uint8A
 
   y -= 18;
   one.drawText(t.client, { x: MARGIN, y, size: 13, font: bold, color: INK });
+  places.push({ title: t.client, page: one, y: y + 16 });
   y -= 30;
   const full = WIDTH - MARGIN * 2;
   const half = (full - 20) / 2;
@@ -160,8 +167,11 @@ export async function samplePdfBytes(locale: 'en' | 'es' = 'en'): Promise<Uint8A
   y -= 40;
   for (const [heading, body] of t.clauses.slice(0, 2)) {
     one.drawText(heading, { x: MARGIN, y, size: 11.5, font: bold, color: INK });
+    places.push({ title: heading, page: one, y: y + 14 });
     y = paragraph(one, body, y - 18) - 10;
   }
+  const seeAt = y - 4;
+  one.drawText(t.seeEnding, { x: MARGIN, y: seeAt, size: 10.5, font: regular, color: BRAND });
   footer(one, 1);
 
   // The second page: the rest of the clauses, and where to sign.
@@ -169,17 +179,45 @@ export async function samplePdfBytes(locale: 'en' | 'es' = 'en'): Promise<Uint8A
   y = HEIGHT - 80;
   for (const [heading, body] of t.clauses.slice(2)) {
     two.drawText(heading, { x: MARGIN, y, size: 11.5, font: bold, color: INK });
+    places.push({ title: heading, page: two, y: y + 14 });
     y = paragraph(two, body, y - 18) - 10;
   }
   y -= 30;
   two.drawText(t.signHere, { x: MARGIN, y, size: 13, font: bold, color: INK });
+  places.push({ title: t.signHere, page: two, y: y + 16 });
   y -= 110;
   for (const [i, who] of [t.clientSign, t.providerSign].entries()) {
     const x = MARGIN + i * (half + 20);
     two.drawLine({ start: { x, y }, end: { x: x + half, y }, thickness: 0.8, color: INK });
     two.drawText(who, { x, y: y - 16, size: 10, font: regular, color: MUTED });
   }
+  two.drawText(t.contact, { x: MARGIN, y: y - 60, size: 10, font: regular, color: BRAND });
   footer(two, 2);
+
+  // Where it leads: the line on the first page to the clause it names, the address of the web, and a table of contents.
+  const { context } = doc;
+  const goTo = (page: PDFPage, top: number) => context.obj([page.ref, PDFName.of('XYZ'), PDFNull, top, PDFNull]);
+  const link = (page: PDFPage, x: number, y: number, width: number, action: Record<string, unknown>) =>
+    page.node.addAnnot(context.register(context.obj({ Type: 'Annot', Subtype: 'Link', Rect: [x, y - 3, x + width, y + 11], Border: [0, 0, 0], ...action } as never)));
+  const ending = places.find((place) => place.title === t.clauses[4][0])!;
+  link(one, MARGIN, seeAt, regular.widthOfTextAtSize(t.seeEnding, 10.5), { Dest: goTo(ending.page, ending.y) });
+  link(two, MARGIN, y - 60, regular.widthOfTextAtSize(t.contact, 10), { A: { Type: 'Action', S: 'URI', URI: PDFString.of('https://github.com/JFranciscoRobles/rebopdf') } });
+  const root = context.nextRef();
+  const refs = places.map(() => context.nextRef());
+  places.forEach((place, i) =>
+    context.assign(
+      refs[i],
+      context.obj({
+        Title: PDFHexString.fromText(place.title),
+        Parent: root,
+        Dest: goTo(place.page, place.y),
+        ...(i ? { Prev: refs[i - 1] } : {}),
+        ...(i < refs.length - 1 ? { Next: refs[i + 1] } : {}),
+      } as never),
+    ),
+  );
+  context.assign(root, context.obj({ Type: 'Outlines', First: refs[0], Last: refs.at(-1)!, Count: refs.length }));
+  doc.catalog.set(PDFName.of('Outlines'), root);
 
   return doc.save();
 }

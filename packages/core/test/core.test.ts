@@ -4,6 +4,8 @@ import {
   extractPages,
   findField,
   insertBlankPage,
+  linksOf,
+  outlineOf,
   insertPdf,
   markBounds,
   movePages,
@@ -28,7 +30,7 @@ const reopen = async (pdf: Pdf, flatten = false) => openPdf(await savePdf(pdf, {
 const annotations = async (pdf: Pdf) => {
   const reader = await readerOf(Object.values(pdf.sources)[0]);
   const out: string[][] = [];
-  for (let i = 1; i <= reader.numPages; i++) out.push((await (await reader.getPage(i)).getAnnotations()).filter((a) => a.subtype !== 'Widget').map((a) => a.subtype));
+  for (let i = 1; i <= reader.numPages; i++) out.push((await (await reader.getPage(i)).getAnnotations()).filter((a) => a.subtype !== 'Widget' && a.subtype !== 'Link').map((a) => a.subtype));
   return out;
 };
 
@@ -260,6 +262,33 @@ describe('marks', () => {
     pdf = addMark(pdf, { kind: 'text', page: pdf.pages[0].id, rect: { x: 64, y: 100, width: 300, height: 20 }, text: 'Done ✅ — ok', size: 10, color: '#000000' });
     const back = await reopen(pdf);
     expect((await pageText(back, back.pages[0].id)).text).toMatch(/Done\s+— ok/);
+  });
+});
+
+describe('where a PDF leads', () => {
+  it('reads its links, to the web and to its pages, and its outline', async () => {
+    const pdf = await samplePdf('en');
+    const [one, two] = pdf.pages.map((p) => p.id);
+    const links = await linksOf(pdf, one);
+    expect(links).toHaveLength(1);
+    expect(links[0].to).toMatchObject({ page: two });
+    expect(links[0].to!.top).toBeGreaterThan(300);
+    expect((await linksOf(pdf, two)).map((l) => l.url)).toEqual(['https://github.com/JFranciscoRobles/rebopdf']);
+    const outline = await outlineOf(pdf);
+    expect(outline.map((o) => o.title)).toEqual(['The client', '1. The work', '2. Payment', '3. Confidentiality', '4. Ownership', '5. Ending', 'Signed in agreement']);
+    expect(outline.map((o) => o.to?.page)).toEqual([one, one, one, two, two, two, two]);
+  });
+
+  it('follows its pages as they are moved, and leads nowhere for a page taken out', async () => {
+    const pdf = await samplePdf('en');
+    const [one, two] = pdf.pages.map((p) => p.id);
+    expect((await linksOf(movePages(pdf, [two], one), one))[0].to?.page).toBe(two);
+    const less = removePages(pdf, [two]);
+    expect(await linksOf(less, one)).toEqual([]);
+    expect((await outlineOf(less)).filter((o) => o.to).length).toBe(3);
+    // Saved, they lead where they led.
+    const back = await reopen(movePages(pdf, [two], one));
+    expect((await linksOf(back, back.pages[1].id))[0].to?.page).toBe(back.pages[0].id);
   });
 });
 

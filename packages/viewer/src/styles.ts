@@ -94,6 +94,21 @@ const CSS = `
 .rp-side { display: flex; flex-direction: column; flex: none; width: 184px; background: var(--rp-chrome); border-right: 1px solid var(--rp-border); min-height: 0; }
 .rp-side[hidden] { display: none; }
 .rp-side-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; row-gap: 4px; padding: 10px 12px 4px; color: var(--rp-muted); font-size: 12px; font-weight: 600; }
+.rp-side-tabs { display: flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--rp-hover); }
+.rp-side-tab { height: 26px; padding: 0 10px; border: 0; border-radius: 7px; background: none; color: var(--rp-muted); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.rp-side-tab[aria-selected="true"] { background: var(--rp-raised); color: var(--rp-text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12); }
+.rp-outline { flex: 1 1 auto; overflow-y: auto; padding: 6px 8px 16px; }
+.rp-outline ul { list-style: none; margin: 0; padding: 0; }
+.rp-outline-row { display: flex; align-items: center; padding-left: calc(var(--depth) * 12px); }
+.rp-outline-item { flex: 1; min-width: 0; padding: 6px 8px; border: 0; border-radius: 7px; background: none; color: var(--rp-text); font: inherit; font-size: 13px; line-height: 1.3; text-align: left; cursor: pointer; }
+.rp-outline-item:hover { background: var(--rp-hover); }
+.rp-outline-item:disabled { color: var(--rp-muted); cursor: default; background: none; }
+.rp-outline-toggle { display: grid; place-items: center; flex: none; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--rp-muted); cursor: pointer; }
+.rp-outline-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
+.rp-outline-row:not(:has(.rp-outline-toggle)) { padding-left: calc(var(--depth) * 12px + 22px); }
+.rp-links { pointer-events: none; }
+.rp-link { position: absolute; pointer-events: auto; border-radius: 2px; }
+.rp-link:hover { background: rgba(37, 99, 235, 0.12); }
 .rp-thumbs { flex: 1 1 auto; overflow-y: auto; padding: 8px 12px 16px; list-style: none; margin: 0; }
 .rp-thumb { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 0 0 12px; padding: 8px 6px 6px; border-radius: 10px; cursor: pointer; }
 .rp-thumb:hover { background: var(--rp-hover); }

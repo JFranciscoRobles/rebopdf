@@ -68,6 +68,12 @@ minor version (0.x.0) may change the API; such changes are listed under
   opened, drawn and saved, to be opened after with none; those protected
   only from being changed, as many are, open with no password, as every
   reader opens them.
+- **Links and the table of contents**: the links of a page lead where they
+  lead (an address of the web opens apart; a place of the PDF is gone to,
+  at its height), and a PDF with an outline has it in a tab beside the
+  pages, its sections opened and closed. Both follow the pages as they are
+  moved, joined and taken out (`linksOf`, `outlineOf`). The sample
+  agreement has both.
 - **Blank pages** (`insertBlankPage`, and a button over the thumbnails), as
   big as the page before them.
 - **Printing**, the PDF as it is now.

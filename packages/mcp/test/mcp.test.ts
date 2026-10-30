@@ -97,7 +97,7 @@ describe('the MCP server', () => {
     expect(Object.fromEntries(saved.fields.map((f) => [f.name, f.value]))).toMatchObject({ 'client.name': 'Ana García', plan: 'Business', accept: true, billing: 'Yearly' });
     expect((await pageText(saved, saved.pages[1].id)).text).toContain('Madrid, 29 October 2026');
     const reader = await readerOf(Object.values(saved.sources)[0]);
-    const annots = [...(await (await reader.getPage(1)).getAnnotations()), ...(await (await reader.getPage(2)).getAnnotations())].filter((a) => a.subtype !== 'Widget');
+    const annots = [...(await (await reader.getPage(1)).getAnnotations()), ...(await (await reader.getPage(2)).getAnnotations())].filter((a) => a.subtype !== 'Widget' && a.subtype !== 'Link');
     expect(annots.map((a) => a.subtype).sort()).toEqual(['Highlight', 'Highlight', 'Text']);
   });
 

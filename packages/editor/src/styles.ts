@@ -7,6 +7,7 @@ const CSS = `
 .rp-root[data-tool="ink"] .rp-page { cursor: crosshair; touch-action: none; }
 .rp-root:not([data-tool="select"]):not([data-tool="highlight"]) .textLayer { pointer-events: none; }
 .rp-root:not([data-tool="select"]) .rp-fields { display: none; }
+.rp-root:not([data-tool="select"]):not([data-tool="highlight"]) .rp-links { display: none; }
 .rp-root[data-tool="select"] .rp-mark { pointer-events: auto; cursor: pointer; }
 .rp-root[data-tool="select"] .rp-mark-ink { pointer-events: none; }
 .rp-root[data-tool="select"] .rp-mark-ink path { pointer-events: stroke; cursor: pointer; }

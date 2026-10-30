@@ -53,6 +53,7 @@ await writeFile('filled.pdf', await savePdf(pdf)); // or { flatten: true }
 ## What it does
 
 - **Read:** the pages drawn as they come near the view, thumbnails at the side, the page in view and a box to go to one, zoom (to the width, to the page, or 25% to 400%; ⌘ and the wheel), and the text over each page to select and copy.
+- **Links and contents:** the links of the pages lead where they lead, and the table of contents of a book or a paper is a tab beside the pages.
 - **Search:** without minding capitals or accents ("accion" finds "Acción"), across the end of a line, every place shown, the next and the one before with Enter and Shift+Enter.
 - **Forms:** text, checkboxes, radio buttons, choices and lists, filled in the page and saved as a form.
 - **Marks:** highlights of the text selected (with a comment), notes, drawing by hand, text written on the page (to fill a form with no fields), and signatures, drawn, typed or a picture. Each chosen to move by dragging or by the arrows, to colour, to change and to delete.
