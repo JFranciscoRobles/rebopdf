@@ -1,0 +1,42 @@
+{
+  "name": "rebopdf",
+  "version": "0.1.0",
+  "description": "PDFs in the browser and in your application: read, search, annotate, fill forms, sign, and put pages in order, saved as a PDF any reader opens.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @rebopdf/playground",
+    "build": "npm run build -w @rebopdf/playground",
+    "mcp": "vite-node packages/mcp/src/main.ts",
+    "test": "vitest run",
+    "test:browser": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "build:packages": "npm run build -w @rebopdf/core -w @rebopdf/viewer -w @rebopdf/editor -w @rebopdf/react -w @rebopdf/mcp",
+    "release": "npm run build:packages && node tools/release.mjs"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@biomejs/biome": "2.5.15",
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "happy-dom": "^21.0.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "vite-node": "^6.0.0",
+    "vitest": "^5.0.5"
+  }
+}

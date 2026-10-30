@@ -1,0 +1,129 @@
+# ReboPDF
+
+PDFs in the browser and in your application, in the look of the Rebo suite
+(light and dark): read them, search them, fill their forms, highlight, note,
+draw and write on them, sign them, and turn, delete, move, join and take out
+their pages. What is done is saved as a PDF any reader opens: the form stays
+a form, highlights and notes stay annotations, and a page taken out is gone
+from the file, not only from its list of pages. The interface is in English
+and Spanish.
+
+It is the PDFs of the Rebo suite, beside [Rebodocs](https://rebodocs.com),
+Rebosheets, ReboSlides, ReboFiles, Rebomail and ReboNotes. It is early:
+version 0.1.
+
+## Quick start
+
+```sh
+npm install @rebopdf/editor    # or @rebopdf/viewer, or @rebopdf/react
+```
+
+```ts
+import { openPdf } from '@rebopdf/core';
+import { mountEditor } from '@rebopdf/editor';
+
+const bytes = new Uint8Array(await (await fetch('/contract.pdf')).arrayBuffer());
+const editor = mountEditor(document.querySelector('#pdf')!, {
+  pdf: await openPdf(bytes, { name: 'contract.pdf' }),
+  locale: 'en',
+  author: 'Ana',
+  onSave: (bytes) => upload(bytes), // without it, the button downloads the PDF
+});
+```
+
+```tsx
+import { PdfEditor, usePdf } from '@rebopdf/react';
+
+function Contract() {
+  const { pdf } = usePdf('/contract.pdf');
+  return pdf ? <PdfEditor pdf={pdf} onSave={(bytes) => upload(bytes)} style={{ height: 720 }} /> : null;
+}
+```
+
+```ts
+// A server: fill a form and save it
+import { openPdf, savePdf, setField } from '@rebopdf/core';
+
+let pdf = await openPdf(await readFile('form.pdf'));
+pdf = setField(pdf, 'client.name', 'Ana García');
+pdf = setField(pdf, 'accept', true);
+await writeFile('filled.pdf', await savePdf(pdf)); // or { flatten: true }
+```
+
+## What it does
+
+- **Read:** the pages drawn as they come near the view, thumbnails at the side, the page in view and a box to go to one, zoom (to the width, to the page, or 25% to 400%; ⌘ and the wheel), and the text over each page to select and copy.
+- **Search:** without minding capitals or accents ("accion" finds "Acción"), across the end of a line, every place shown, the next and the one before with Enter and Shift+Enter.
+- **Forms:** text, checkboxes, radio buttons, choices and lists, filled in the page and saved as a form.
+- **Marks:** highlights of the text selected (with a comment), notes, drawing by hand, text written on the page (to fill a form with no fields), and signatures, drawn, typed or a picture. Each chosen to move by dragging or by the arrows, to colour, to change and to delete.
+- **Pages:** turned, deleted, moved by dragging their thumbnails or by Alt and the arrows, taken out as a PDF of their own, and the pages of other PDFs put in by dropping them on the editor.
+- **One history:** ⌘Z and ⇧⌘Z through every change, fields typed in included.
+- **Saving:** a PDF any reader opens, or flattened, with the fields and the marks drawn into the pages for good.
+
+## Packages
+
+| Package | What it is |
+| --- | --- |
+| `@rebopdf/core` | The engine, with no DOM, in the browser and in Node: a PDF opened as its pages, its fields and its marks; what is done to it (immutable); its text read and searched; the PDF saved. On [PDF.js](https://mozilla.github.io/pdf.js/) to read and [pdf-lib](https://github.com/cantoo-scribe/pdf-lib) to write. |
+| `@rebopdf/viewer` | The viewer, with no framework: the pages, thumbnails, zoom, search, the text to select, and the fields and marks over them. |
+| `@rebopdf/editor` | The editor, with no framework: the viewer with tools, the thumbnails to act on, files opened and dropped, the history and saving. |
+| `@rebopdf/react` | `PdfViewer`, `PdfEditor` and `usePdf`. |
+| `@rebopdf/mcp` | An MCP server (`rebopdf-mcp`) so that Claude and other assistants read, search, fill, mark, sign and put in order PDF files. |
+| `@rebopdf/playground` | Where everything is tried: `npm run dev` · :5300 |
+
+## PDF.js, in a worker of its own
+
+PDF.js reads files in the page itself unless it is given a worker, which
+keeps the page answering while a big file is read. With Vite:
+
+```ts
+import { usePdfWorker, usePdfAssets } from '@rebopdf/core';
+import worker from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
+
+usePdfWorker(worker);
+// Fonts a PDF names without carrying them, and the maps of Chinese, Japanese
+// and Korean text: a copy of the pdfjs-dist folder the application serves.
+usePdfAssets('/pdfjs/');
+```
+
+## Assistants (MCP)
+
+```sh
+claude mcp add rebopdf -- npx -y @rebopdf/mcp --root ~/Documents
+```
+
+The assistant opens a PDF (`open_pdf`), reads it page by page (`read_pdf`),
+finds text (`search_pdf`), fills its form (`list_fields`, `fill_fields`),
+highlights text and puts notes and text by a text of the page
+(`highlight_text`, `add_note`, `add_text`), signs it with a picture of a
+signature the person gives (`sign`), turns, deletes, moves, joins and takes
+out pages, and writes it (`save_pdf`), to a copy unless it is told the file.
+`--root` keeps it to those folders.
+
+## Usage
+
+```sh
+npm install
+npm run dev            # the playground: ?viewer, ?empty, ?lang=es
+npm test               # the engine, the viewer, the editor, React and the MCP server
+npm run test:browser   # the editor in Chrome, driven as a person would
+npm run typecheck
+npm run lint
+```
+
+## Shortcuts
+
+| | |
+| --- | --- |
+| V · H · N · D · T · S | Select and fill · Highlight · Note · Draw · Text · Sign |
+| ⌘F | Search |
+| ⌘Z · ⇧⌘Z | Undo · Redo |
+| ⌘+ · ⌘− · ⌘0 | Zoom in · out · automatic |
+| Delete · arrows | Delete or move the mark chosen (Shift: by 10) |
+| Alt+↑ · Alt+↓ | Move the page of the thumbnail with the focus |
+| Escape | Let go of the mark, then of the tool |
+
+## License
+
+MIT. PDF.js is Apache-2.0 and pdf-lib MIT; both are dependencies, installed
+from npm.

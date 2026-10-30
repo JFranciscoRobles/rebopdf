@@ -1,0 +1,17 @@
+{
+  "name": "@rebopdf/viewer",
+  "version": "0.1.0",
+  "description": "A PDF shown in the page: its pages drawn as they are needed, thumbnails, zoom, search, text to select, and the fields and marks of the engine over them.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@rebopdf/core": "*"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  }
+}

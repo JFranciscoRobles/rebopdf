@@ -1,0 +1,23 @@
+{
+  "name": "@rebopdf/react",
+  "version": "0.1.0",
+  "description": "ReboPDF in React: the viewer and the editor as components.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@rebopdf/core": "*",
+    "@rebopdf/editor": "*",
+    "@rebopdf/viewer": "*"
+  },
+  "peerDependencies": {
+    "react": ">=19",
+    "react-dom": ">=19"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  }
+}
