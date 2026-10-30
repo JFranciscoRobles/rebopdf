@@ -14,3 +14,8 @@ apps/site/next-env.d.ts
 # What the browser tests leave.
 test-results
 playwright-report
+
+# The site: what Next makes.
+apps/site/.next
+apps/site/out
+apps/site/next-env.d.ts

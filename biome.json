@@ -57,6 +57,25 @@
       }
     }
   },
+  "overrides": [
+    {
+      "includes": ["apps/site/**"],
+      "linter": {
+        "rules": {
+          "security": {
+            "noDangerouslySetInnerHtml": "off"
+          },
+          "performance": {
+            "noImgElement": "off"
+          },
+          "style": {
+            "noHeadElement": "off",
+            "noDescendingSpecificity": "off"
+          }
+        }
+      }
+    }
+  ],
   "assist": {
     "enabled": false
   },

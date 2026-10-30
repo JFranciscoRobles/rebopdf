@@ -23,7 +23,9 @@
     "format": "biome check --write .",
     "build:packages": "npm run build -w @rebopdf/core -w @rebopdf/viewer -w @rebopdf/editor -w @rebopdf/ocr -w @rebopdf/collab -w @rebopdf/react -w @rebopdf/mcp",
     "release": "npm run build:packages && node tools/release.mjs",
-    "collab": "vite-node packages/collab/src/main.ts"
+    "collab": "vite-node packages/collab/src/main.ts",
+    "site": "npm run dev -w @rebopdf/site",
+    "build:site": "npm run build -w @rebopdf/site"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",

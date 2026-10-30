@@ -84,6 +84,7 @@ await writeFile('filled.pdf', await savePdf(pdf)); // or { flatten: true }
 | `@rebopdf/react` | `PdfViewer`, `PdfEditor` and `usePdf`. |
 | `@rebopdf/mcp` | An MCP server (`rebopdf-mcp`) so that Claude and other assistants read, search, fill, mark, sign and put in order PDF files. |
 | `@rebopdf/playground` | Where everything is tried: `npm run dev` · :5300 |
+| `apps/site` | The landing page, the live editor, the demo and the documentation, in English and Spanish: `npm run site` · :5301 |
 
 ## PDF.js, in a worker of its own
 

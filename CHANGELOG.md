@@ -83,6 +83,11 @@ The first version to go to npm: 0.1.0 never went, and what it has is here.
   their number and fields by their name, so in a room pages are not turned,
   moved or deleted; undo takes back what was done here, not what others
   did (`subscribe`, `applyRemote`, `setPeers`, `lockPages` of the editor).
+- **The site** (`npm run site`, :5301): the landing page in the look of
+  the suite, with a picture of the editor in the hero and the editor live
+  under it, the demo on the whole window (the editor or the viewer alone,
+  shared with `?collab=`), and seventeen pages of documentation in English
+  and Spanish.
 - The editor takes items of the application's own in its menu (`menu`),
   and says what they did (`notify`).
 - Saved by adding to the file, only what changed is written: the fields
