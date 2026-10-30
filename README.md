@@ -108,14 +108,17 @@ usePdfAssets('/pdfjs/');
 claude mcp add rebopdf -- npx -y @rebopdf/mcp --root ~/Documents [--font ~/Fonts/NotoSans.ttf]
 ```
 
-The assistant opens a PDF (`open_pdf`), reads it page by page (`read_pdf`),
-finds text (`search_pdf`), fills its form (`list_fields`, `fill_fields`),
-highlights text and puts notes and text by a text of the page
-(`highlight_text`, `add_note`, `add_text`), signs it with a picture of a
-signature the person gives (`sign`), blacks out text and parts of pages for
-good (`redact_text`, `redact_area`), turns, deletes, moves, joins and takes
-out pages, and writes it (`save_pdf`), to a copy unless it is told the file.
-`--root` keeps it to those folders.
+With its 29 tools, the assistant opens a PDF (`open_pdf`), reads it page by
+page (`read_pdf`, and `recognize_text` for scans), finds text
+(`search_pdf`), fills its form or makes one (`list_fields`, `fill_fields`,
+`add_field`, `detect_fields`), highlights text and puts notes and text by a
+text of the page (`highlight_text`, `add_note`, `add_text`), signs it with a
+picture of a signature or digitally with a certificate the person gives
+(`sign`, `sign_digitally`), checks its signatures (`check_signatures`),
+blacks out text and parts of pages for good (`redact_text`, `redact_area`),
+compares it with another version (`compare_pdfs`), turns, deletes, moves,
+joins and takes out pages, and writes it (`save_pdf`), to a copy unless it
+is told the file. `--root` keeps it to those folders.
 
 ## Usage
 
