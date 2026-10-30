@@ -31,8 +31,12 @@ describe('recognizing text', () => {
     const read = await recognizeText(pdf, { languages: ['eng'], cachePath: join(tmpdir(), 'rebopdf-tessdata'), onProgress: (done, total) => (progress = `${done}/${total}`) });
     expect(progress).toBe('1/1');
     const text = (await pageText(read, read.pages[0].id)).text;
-    // Tesseract reads the body of the page; a big title over a dark band of a scan, it may not.
+    // The body of the page, and its big title under a dark band, which the layout of the whole page leaves out.
     expect(text).toContain('This agreement is made between Rebo Studio');
+    expect(text.indexOf('Service agreement')).toBeGreaterThanOrEqual(0);
+    expect(text.indexOf('Service agreement')).toBeLessThan(text.indexOf('This agreement'));
+    const [title] = await searchPdf(read, 'Service agreement');
+    expect(title.rects[0].y).toBeGreaterThan(740);
     expect(text).toMatch(/The client pays the fee/);
     const [provider] = await searchPdf(read, 'website');
     expect(provider.rects[0].y).toBeGreaterThan(100);
