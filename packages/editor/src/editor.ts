@@ -38,7 +38,7 @@ import {
   updateField,
   updateMark,
 } from '@rebopdf/core';
-import { fill, type Geometry, type IconName, icon, makeOption, mountViewer, type PageView, pathData, type Viewer, type Zoom } from '@rebopdf/viewer';
+import { fill, type Geometry, type IconName, icon, makeOption, mountComparison, mountViewer, type PageView, pathData, type Viewer, type Zoom } from '@rebopdf/viewer';
 import { type EditorStrings, editorStringsFor } from './i18n';
 import { askCertificate } from './certificate';
 import { askSignature, type Signature } from './signature';
@@ -297,6 +297,37 @@ export class Editor {
       else if (checks.some((c) => !c.whole)) this.toast(fill(this.t.signatureHoldsChanged, { names: checks.map(name).join(', ') }));
       else this.toast(fill(this.t.signatureIntact, { names: checks.map(name).join(', ') }));
     });
+  }
+
+  /** Compares the PDF with another version of it, from a file: what changed, side by side. */
+  async compareWith(file?: File): Promise<void> {
+    const chosen =
+      file ??
+      (await new Promise<File | undefined>((resolve) => {
+        const input = this.doc.createElement('input');
+        input.type = 'file';
+        input.accept = 'application/pdf,.pdf';
+        input.addEventListener('change', () => resolve(input.files?.[0]));
+        input.click();
+      }));
+    if (!chosen || !this.current || !this.viewer) return;
+    const other = await this.read(chosen);
+    if (!other) return;
+    const layer = this.doc.createElement('div');
+    layer.className = 'rp-compare-layer';
+    this.viewer.root.append(layer);
+    const view = await mountComparison(layer, {
+      before: other,
+      after: this.current,
+      locale: this.options.locale,
+      theme: this.options.theme,
+      onClose: () => {
+        view.destroy();
+        layer.remove();
+        this.viewer?.scroll.focus({ preventScroll: true });
+      },
+    });
+    if (view.comparison.text.length) view.show(0);
   }
 
   /** Signs the PDF with a certificate of the person, and saves or downloads it signed. */
@@ -1312,6 +1343,7 @@ export class Editor {
       item('download', t.download, '', () => void this.saveOrDownload()),
       item('flatten', t.downloadFlat, t.downloadFlatHint, () => void this.downloadFlat()),
       item('signature', t.signDigitally, t.signDigitallyHint, () => void this.signDigitally()),
+      ...(this.options.files !== false ? [item('layers', t.compareWith, t.compareHint, () => void this.compareWith())] : []),
     ];
     this.openPop(anchor.getBoundingClientRect(), items);
     this.pop?.classList.add('rp-menu');

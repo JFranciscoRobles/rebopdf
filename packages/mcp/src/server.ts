@@ -5,7 +5,7 @@
 
 import { readFile, writeFile } from 'node:fs/promises';
 import { basename, extname, isAbsolute, relative, resolve } from 'node:path';
-import { checkSignatures, extractPages, insertPdf, openPdf, type Pdf, PdfError, savePdf, savesIncrementally, signPdf, whyNotIncremental } from '@rebopdf/core';
+import { checkSignatures, comparePdfs, extractPages, insertPdf, openPdf, type Pdf, PdfError, savePdf, savesIncrementally, signPdf, whyNotIncremental } from '@rebopdf/core';
 import { version } from '../package.json';
 import { type Files, findTool, pagesOf, type Tool, TOOLS, ToolError } from './tools';
 
@@ -98,6 +98,15 @@ const OWN: (Omit<Tool, 'run' | 'writes'> & { annotations: Record<string, boolean
       file: { type: 'string', description: 'Where to write it signed.' },
     },
     required: ['certificate', 'password'],
+  },
+  {
+    name: 'compare_pdfs',
+    title: 'Compare two versions',
+    annotations: { readOnlyHint: true },
+    description:
+      'Compares a PDF open with another version of it, from a file: the words taken out, put in and changed, word by word across the whole of each (text moved to another page is no change), with their pages, and what the fields of their forms hold that changed.',
+    properties: { document: DOCUMENT, file: { type: 'string', description: 'The path of the other version, as it was before.' } },
+    required: ['file'],
   },
   {
     name: 'check_signatures',
@@ -270,6 +279,22 @@ export function createPdfServer(options: ServerOptions = {}) {
         doc.unsaved = target !== doc.file;
         const [check] = (await checkSignatures(bytes)).slice(-1);
         return `Signed by ${check?.signer ?? 'the certificate'} and wrote ${target}.${check?.intact ? ' The signature checks: what was signed is as it was signed.' : ''}`;
+      }
+      case 'compare_pdfs': {
+        const doc = document(args.document);
+        const { full, pdf: before } = await read(String(args.file ?? ''));
+        const { text, fields, pages } = await comparePdfs(before, doc.pdf);
+        if (!text.length && !fields.length) return `${basename(full)} and ${basename(doc.file)} say the same.`;
+        const at = (pdf: Pdf, places?: { page: string }[]) => (places?.length ? ` (page ${pdf.pages.findIndex((p) => p.id === places[0].page) + 1})` : '');
+        const lines = text.map((c) =>
+          c.kind === 'changed'
+            ? `- changed${at(doc.pdf, c.out)}: "${c.before}" → "${c.after}"`
+            : c.kind === 'removed'
+              ? `- taken out${at(before, c.in)}: "${c.before}"`
+              : `- put in${at(doc.pdf, c.out)}: "${c.after}"`,
+        );
+        const filled = fields.map((f) => `- field ${f.name}: ${JSON.stringify(f.before ?? null)} → ${JSON.stringify(f.after ?? null)}`);
+        return `From ${basename(full)} (${pages[0]} pages) to ${basename(doc.file)} (${pages[1]} pages), ${text.length + fields.length} changes:\n${[...lines, ...filled].join('\n')}`;
       }
       case 'check_signatures': {
         const bytes = args.file

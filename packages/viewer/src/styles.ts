@@ -126,6 +126,10 @@ const CSS = `
 .rp-layer { position: absolute; inset: 0; }
 .rp-hits, .rp-marks { pointer-events: none; }
 .rp-hit { position: absolute; background: var(--rp-hit); border-radius: 2px; }
+.rp-region { position: absolute; border-radius: 2px; mix-blend-mode: multiply; }
+.rp-region-removed { background: rgba(224, 49, 49, 0.28); box-shadow: inset 0 -2px 0 #c92a2a; }
+.rp-region-added { background: rgba(47, 158, 68, 0.28); box-shadow: inset 0 -2px 0 #2b8a3e; }
+.rp-region-current { outline: 2.5px solid var(--rp-accent); outline-offset: 1px; mix-blend-mode: normal; }
 .rp-hit-current { background: var(--rp-hit-current); outline: 2px solid var(--rp-accent); }
 
 .rp-mark { position: absolute; }
@@ -161,6 +165,21 @@ select.rp-field { padding: 0 2px; }
 .rp-status { position: absolute; inset: 0; display: grid; place-items: center; color: var(--rp-muted); }
 .rp-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
+.rp-compare-body { display: flex; flex: 1 1 auto; min-height: 0; }
+.rp-compare-list { flex: none; width: 260px; margin: 0; padding: 8px; overflow-y: auto; list-style: none; background: var(--rp-chrome); border-right: 1px solid var(--rp-border); }
+.rp-compare-item { margin: 0 0 4px; border-left: 3px solid transparent; border-radius: 6px; font-size: 13px; }
+.rp-compare-item button { width: 100%; padding: 6px 8px; border: 0; border-radius: 6px; background: none; color: var(--rp-text); font: inherit; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.rp-compare-item button:hover { background: var(--rp-hover); }
+.rp-compare-item[aria-current] button { background: var(--rp-pressed); }
+.rp-compare-removed { border-left-color: #c92a2a; }
+.rp-compare-added { border-left-color: #2b8a3e; }
+.rp-compare-changed { border-left-color: #e67700; }
+.rp-compare-field { padding: 6px 8px; border-left-color: var(--rp-muted); color: var(--rp-muted); }
+.rp-compare-panes { display: grid; grid-template-columns: 1fr 1fr; flex: 1 1 auto; min-width: 0; }
+.rp-compare-pane { position: relative; min-width: 0; border-right: 1px solid var(--rp-border); }
+.rp-compare-pane > .rp-root { height: 100%; min-height: 0; }
+.rp-compare-count { color: var(--rp-muted); font-size: 13px; white-space: nowrap; }
+@media (max-width: 760px) { .rp-compare-body { flex-direction: column; } .rp-compare-list { width: auto; max-height: 30%; border-right: 0; border-bottom: 1px solid var(--rp-border); } }
 @media (max-width: 1400px) {
   .rp-hide-medium { display: none !important; }
   .rp-zoom { max-width: 104px; }

@@ -59,6 +59,8 @@ const CSS = `
 .rp-toast { position: absolute; left: 50%; bottom: 20px; z-index: 40; max-width: calc(100% - 32px); padding: 10px 14px; border-radius: 10px; background: var(--rp-text); color: var(--rp-bg); box-shadow: var(--rp-shadow); font-size: 13.5px; transform: translateX(-50%); }
 .rp-toast[hidden] { display: none; }
 
+.rp-compare-layer { position: absolute; inset: 0; z-index: 45; display: flex; flex-direction: column; background: var(--rp-canvas); }
+.rp-compare-layer > .rp-root { flex: 1; min-height: 0; }
 .rp-dialog-back { position: absolute; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: var(--rp-overlay); }
 .rp-dialog { display: flex; flex-direction: column; gap: 14px; width: min(520px, 100%); padding: 18px; border-radius: 14px; background: var(--rp-raised); color: var(--rp-text); box-shadow: var(--rp-shadow); }
 .rp-dialog h2 { margin: 0; font-size: 16px; }

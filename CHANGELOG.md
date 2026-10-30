@@ -61,6 +61,12 @@ The first version to go to npm: 0.1.0 never went, and what it has is here.
   certificate, and whether the file was added to after. The editor says it
   when a signed PDF is opened. Who to trust is a reader's to say: the
   authorities that gave the certificates are not checked.
+- **Versions compared** (`comparePdfs`, `mountComparison`, Compare with
+  another version…, `compare_pdfs`): word by word across the whole of each
+  PDF, so text moved to another page is no change; what was taken out in
+  red on the first, what was put in in green on the second, side by side,
+  the changes listed and brought into view one by one, and what the fields
+  of their forms hold that changed.
 - Saved by adding to the file, only what changed is written: the fields
   that hold what they held, and what the file says of itself, stay as they
   were.

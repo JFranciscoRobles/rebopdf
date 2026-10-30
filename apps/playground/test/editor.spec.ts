@@ -571,3 +571,22 @@ test('a PDF is signed digitally with a certificate, in its signature field, and 
   expect(await checkSignatures(bytes)).toMatchObject([{ field: 'Signature_field', signer: 'Luis Pérez', reason: 'Witness', intact: true, whole: true }]);
   await expect(page.getByRole('status')).toHaveText(/Signed by Luis Pérez: what was signed is as it was signed\.|Signed digitally by Luis Pérez\./);
 });
+
+test('a PDF is compared with another version of it, side by side', async ({ page }) => {
+  // The version before: the agreement with a word of its own.
+  const { PDFDocument, StandardFonts } = await import('@cantoo/pdf-lib');
+  const older = await PDFDocument.load(await samplePdfBytes('en'));
+  const font = await older.embedFont(StandardFonts.Helvetica);
+  older.getPage(1).drawText('Draft', { x: 64, y: 790, size: 12, font });
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'More' }).click();
+  await page.getByRole('menuitem', { name: /Compare with another version/ }).click();
+  await (await chooser).setFiles({ name: 'Draft.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await older.save()) });
+  const comparison = page.getByRole('region', { name: 'Comparison' });
+  await expect(comparison).toBeVisible();
+  await expect(comparison.getByRole('list', { name: 'Changes' }).getByRole('button')).toHaveText(['Taken out: “Draft”']);
+  await expect(comparison.locator('.rp-region-removed')).toHaveCount(1);
+  await expect(comparison.getByText('Change 1 of 1')).toBeVisible();
+  await comparison.getByRole('button', { name: 'Close' }).click();
+  await expect(comparison).toHaveCount(0);
+});

@@ -197,7 +197,9 @@ describe('the MCP server', () => {
     await writeFile(join(dir, 'ana.key'), der(forge.pki.encryptPrivateKeyInfo(forge.pki.wrapRsaPrivateKey(forge.pki.privateKeyToAsn1(keys.privateKey)), 'secret')));
     await call('open_pdf', { file: 'contract.pdf' });
     expect((await call('sign_digitally', { certificate: 'ana.p12', password: 'wrong' })).text).toBe('The password is not the one of the certificate.');
-    expect((await call('sign_digitally', { certificate: 'ana.p12', password: 'secret', reason: 'I agree' })).text).toMatch(/^Signed by Ana García and wrote .*contract \(signed\)\.pdf\. The signature checks/);
+    expect((await call('sign_digitally', { certificate: 'ana.p12', password: 'secret', reason: 'I agree' })).text).toMatch(
+      /^Signed by Ana García and wrote .*contract \(signed\)\.pdf\. The signature checks/,
+    );
     await call('fill_fields', { values: { accept: true } });
     expect((await call('sign_digitally', { certificate: 'ana.cer', key: 'ana.key', password: 'secret', file: 'twice.pdf' })).text).toMatch(/^Signed by Ana García and wrote .*twice\.pdf/);
     const checked = (await call('check_signatures', { file: 'twice.pdf' })).text.split('\n');
@@ -205,6 +207,17 @@ describe('the MCP server', () => {
     expect(checked[1]).toMatch(/^- Signature2: Ana García.* — holds: the file is as it was signed\.$/);
     expect((await call('check_signatures', { file: 'contract.pdf' })).text).toBe('It has no digital signatures.');
   }, 60_000);
+
+  it('compares two versions of a PDF', async () => {
+    const { call } = await setup();
+    await call('open_pdf', { file: 'contract.pdf' });
+    expect((await call('compare_pdfs', { file: 'contract.pdf' })).text).toBe('contract.pdf and contract.pdf say the same.');
+    await call('fill_fields', { values: { 'client.name': 'Ana' } });
+    const text = (await call('compare_pdfs', { file: 'contrato.pdf' })).text;
+    expect(text).toMatch(/^From contrato\.pdf \(2 pages\) to contract\.pdf \(2 pages\), \d+ changes:/);
+    expect(text).toContain('- field client.name: "" → "Ana"');
+    expect(text).toMatch(/- changed \(page 1\): "Contrato de servicios" → "Service agreement"/);
+  });
 
   it('keeps to its folders', async () => {
     const { call } = await setup();

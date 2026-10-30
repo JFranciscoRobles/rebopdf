@@ -1,6 +1,7 @@
 // The API of @rebopdf/core: a PDF opened, changed and saved, its text read
 // and searched. It runs in the browser and in Node alike.
 
+export { type ChangePlace, type Comparison, comparePdfs, type FieldChange, type TextChange } from './compare';
 export { detectFields } from './detect';
 export {
   addField,

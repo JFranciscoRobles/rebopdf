@@ -90,6 +90,13 @@ const POINT = 96 / 72;
 const ZOOMS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
 const MAX_PIXELS = 16_000_000;
 
+/** Part of a page shown in a tone. */
+export interface Region {
+  page: string;
+  rects: Rect[];
+  tone: 'removed' | 'added' | 'current';
+}
+
 export class Viewer {
   readonly root: HTMLElement;
   readonly t: Strings;
@@ -130,6 +137,8 @@ export class Viewer {
   private thumbDrawn = new Map<string, string>();
   private resize: ResizeObserver;
   private matches: Match[] = [];
+  /** Parts of pages shown in a tone of their own: what was taken out of a PDF, or put in it. */
+  private regions: Region[] = [];
   private match = -1;
   private searching = 0;
   private cleanup: (() => void)[] = [];
@@ -955,9 +964,23 @@ export class Viewer {
     if (left < this.scroll.scrollLeft || left > this.scroll.scrollLeft + this.scroll.clientWidth - 40) this.scroll.scrollLeft = left - 40;
   }
 
+  /** Shows parts of pages in a tone: 'removed', 'added', or 'current' for the one looked at. */
+  setRegions(regions: Region[]): void {
+    this.regions = regions;
+    for (const view of this.views.values()) this.drawHits(view);
+  }
+
   private drawHits(view: PageView) {
     const current = this.matches[this.match];
+    const box = (r: Rect, className: string) => {
+      const el = this.doc.createElement('div');
+      el.className = className;
+      const s = view.geo.toScreenRect(r);
+      Object.assign(el.style, { left: `${s.x}px`, top: `${s.y}px`, width: `${s.width}px`, height: `${s.height}px` });
+      return el;
+    };
     view.hits.replaceChildren(
+      ...this.regions.filter((g) => g.page === view.page.id).flatMap((g) => g.rects.map((r) => box(r, `rp-region rp-region-${g.tone}`))),
       ...this.matches
         .filter((m) => m.page === view.page.id)
         .flatMap((m) =>
