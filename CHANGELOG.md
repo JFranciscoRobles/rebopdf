@@ -4,7 +4,7 @@ Every package of ReboPDF is released at the same version. Before 1.0, a
 minor version (0.x.0) may change the API; such changes are listed under
 **Changed** with what to do about them.
 
-## 0.2.0 — unreleased
+## 0.2.0 — 2026-10-30
 
 The first version to go to npm: 0.1.0 never went, and what it has is here.
 
