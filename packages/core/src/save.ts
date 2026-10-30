@@ -71,6 +71,22 @@ export interface SaveOptions {
    * out, which must be taken out of the file, not added after it.
    */
   incremental?: boolean | 'auto';
+  /**
+   * A password to open it with (AES-256), and what may be done with it
+   * opened: printed, copied, changed. Who has `ownerPassword` may do all;
+   * left out, no one may. A protected PDF is written whole, not added to.
+   */
+  protect?: { password: string; ownerPassword?: string; permissions?: Permissions };
+}
+
+/** What may be done with a protected PDF opened by its password: all of it, when left out. */
+export interface Permissions {
+  printing?: boolean | 'lowResolution';
+  copying?: boolean;
+  modifying?: boolean;
+  annotating?: boolean;
+  fillingForms?: boolean;
+  documentAssembly?: boolean;
 }
 
 /** Why a Pdf cannot be saved by adding to its file: undefined when it can. */
@@ -81,8 +97,8 @@ export function whyNotIncremental(pdf: Pdf): string | undefined {
 }
 
 /** Whether a Pdf is saved by adding to its file: as asked, or, by default, when it is signed. */
-export function savesIncrementally(pdf: Pdf, asked: SaveOptions['incremental'] = 'auto'): boolean {
-  const why = whyNotIncremental(pdf);
+export function savesIncrementally(pdf: Pdf, asked: SaveOptions['incremental'] = 'auto', protect?: SaveOptions['protect']): boolean {
+  const why = protect ? 'It is protected by a password, which the whole file is written with.' : whyNotIncremental(pdf);
   if (asked === true && why) throw new PdfError('incremental', `It cannot be saved by adding to the file as it came: ${why}`);
   if (asked === false || why) return false;
   if (asked === true) return true;
@@ -97,7 +113,7 @@ export const NOTE_SIZE = 20;
 export async function savePdf(pdf: Pdf, options: SaveOptions = {}): Promise<Uint8Array> {
   const used = [...new Set(pdf.pages.map((page) => page.source))];
   const base = used[0];
-  const incremental = savesIncrementally(pdf, options.incremental);
+  const incremental = savesIncrementally(pdf, options.incremental, options.protect);
   const docs = new Map<string, PDFDocument>();
   for (const source of used) docs.set(source, await loadDocument(pdf.sources[source], undefined, incremental));
   const doc = docs.get(base)!;
@@ -182,6 +198,13 @@ export async function savePdf(pdf: Pdf, options: SaveOptions = {}): Promise<Uint
   doc.setModificationDate(new Date());
   if (pdf.info.title && doc.getTitle() !== pdf.info.title) doc.setTitle(pdf.info.title);
   dropUnreachable(doc, gone);
+  if (options.protect) {
+    const { password, ownerPassword, permissions } = options.protect;
+    const allowed = { printing: 'highResolution' as const, copying: true, modifying: true, annotating: true, fillingForms: true, contentAccessibility: true, documentAssembly: true, ...permissions };
+    // Without the owner's password, no one may do more than the password lets: a random one no one knows.
+    const owner = ownerPassword ?? Array.from(globalThis.crypto.getRandomValues(new Uint8Array(24)), (b) => b.toString(36)).join('');
+    doc.encrypt({ userPassword: password, ownerPassword: owner, permissions: { ...allowed, printing: allowed.printing === true ? 'highResolution' : allowed.printing } });
+  }
   return writeDocument(doc);
 }
 

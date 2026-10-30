@@ -32,3 +32,13 @@ Las miniaturas del lado actúan sobre las páginas elegidas (un clic; Mayús o �
 ## Deshacer
 
 ⌘Z y ⇧⌘Z recorren cada cambio, incluido lo escrito en los campos.
+
+## Protegido con contraseña
+
+Descargar con contraseña… (en el menú ⋯) cifra el PDF con AES-256: solo se abre con la contraseña, y lo que no permite (imprimir, copiar su texto, cambiarlo) los lectores no lo ofrecen. En código:
+
+```ts
+const bytes = await savePdf(pdf, { protect: { password: 'abre', permissions: { copying: false } } });
+```
+
+`ownerPassword` lo abre para todo; si no se da, nadie puede hacer más de lo que permite la contraseña. Un PDF protegido se abre en ReboPDF pidiéndola.

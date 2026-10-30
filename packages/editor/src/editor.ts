@@ -43,6 +43,7 @@ import {
 import { fill, type Geometry, type IconName, icon, makeOption, mountComparison, mountViewer, type PageView, pathData, type Viewer, type Zoom } from '@rebopdf/viewer';
 import { type EditorStrings, editorStringsFor } from './i18n';
 import { askCertificate } from './certificate';
+import { askProtection } from './protect';
 import { askSignature, type Signature } from './signature';
 import { injectEditorStyles } from './styles';
 
@@ -1461,6 +1462,7 @@ export class Editor {
       item('print', t.print, '', () => void this.viewer?.print()),
       item('download', t.download, '', () => void this.saveOrDownload()),
       item('flatten', t.downloadFlat, t.downloadFlatHint, () => void this.downloadFlat()),
+      item('lock', t.downloadProtected, t.downloadProtectedHint, () => void this.downloadProtected()),
       item('signature', t.signDigitally, t.signDigitallyHint, () => void this.signDigitally()),
       ...(this.options.files !== false ? [item('layers', t.compareWith, t.compareHint, () => void this.compareWith())] : []),
       ...(this.options.recognize ? [item('text', t.recognize, t.recognizeHint, () => void this.recognizeText())] : []),
@@ -1481,6 +1483,19 @@ export class Editor {
 
   private async downloadFlat() {
     await this.saveOrDownload(true);
+  }
+
+  /** The PDF downloaded encrypted, opened only by a password asked for. */
+  private async downloadProtected() {
+    const pdf = this.current;
+    if (!pdf || !this.viewer) return;
+    const asked = await askProtection(this.viewer.root, this.t);
+    if (!asked) return;
+    try {
+      this.give(await savePdf(pdf, { font: this.options.font, protect: asked }), pdf.name);
+    } catch (error) {
+      this.toast(error instanceof Error ? error.message : String(error));
+    }
   }
 
   private give(bytes: Uint8Array, name: string) {

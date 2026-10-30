@@ -119,6 +119,10 @@ The first version to go to npm: 0.1.0 never went, and what it has is here.
   authorities sign with. In the editor, Sign digitally has a field for the
   authority (`signing.timestamp`) and a box to keep what checks it; in the
   MCP server, `timestamp`, `long_term` and `trusted`.
+- **Protected by a password** (`protect` of `savePdf`; Download with a
+  password… in the editor; `password` of `save_pdf`): encrypted with
+  AES-256, with what may be done with it opened (printed, copied, changed).
+  Its strings are encrypted with its streams, which pdf-lib left out.
 - Recognizing text reads again, each on its own, the strips of a page with
   ink and no word read: a big title the layout of the whole page leaves
   out, as under a dark band, is read.

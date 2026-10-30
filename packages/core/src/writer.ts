@@ -3,7 +3,7 @@
 // (pdf-lib packs them in one that grows with their square); or what changed
 // in a file, added after it as it was, for what was signed in it to hold.
 
-import { PDFArray, PDFDict, type PDFDocument, type PDFForm, PDFName, type PDFObject, PDFRawStream, type PDFRef, PDFStream } from '@cantoo/pdf-lib';
+import { PDFArray, PDFDict, type PDFDocument, type PDFForm, PDFHexString, PDFInvalidObject, PDFName, PDFNumber, type PDFObject, PDFRawStream, PDFRef, PDFStream, PDFString } from '@cantoo/pdf-lib';
 
 /** How many objects go in each stream they are packed in. */
 const PACKED = 100;
@@ -70,11 +70,53 @@ function indirect(out: Bytes, entries: Map<number, Entry>, ref: PDFRef, object: 
   out.text('\nendobj\n');
 }
 
-/** What the trailer of the file says of it: its catalog, its information, its identity. */
+/** What the trailer of the file says of it: its catalog, its information, its identity, how it is encrypted. */
 function trailerOf(doc: PDFDocument): string {
-  const { Root, Info, ID } = doc.context.trailerInfo;
+  const { Root, Info, ID, Encrypt } = doc.context.trailerInfo;
   const text = (object: unknown) => (object ? String(object) : '');
-  return `${Root ? `/Root ${text(Root)}` : ''}${Info ? `/Info ${text(Info)}` : ''}${ID ? `/ID ${text(ID)}` : ''}`;
+  return `${Root ? `/Root ${text(Root)}` : ''}${Info ? `/Info ${text(Info)}` : ''}${ID ? `/ID ${text(ID)}` : ''}${Encrypt ? `/Encrypt ${text(Encrypt)}` : ''}`;
+}
+
+type Encrypt = (bytes: Uint8Array) => Uint8Array;
+
+/** How the objects of a document protected by a password are encrypted, each by its number: undefined when it is not. */
+function cipherOf(doc: PDFDocument): { of(ref: PDFRef): Encrypt; skip: string } | undefined {
+  const security = (doc.context as unknown as { security?: { getEncryptFn(n: number, g: number): Encrypt } }).security;
+  const ref = doc.context.trailerInfo.Encrypt;
+  if (!security || !(ref instanceof PDFRef)) return undefined;
+  return { of: (r) => security.getEncryptFn(r.objectNumber, r.generationNumber), skip: String(ref) };
+}
+
+const hex = (bytes: Uint8Array) => Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+
+/**
+ * An object as it is written encrypted: its strings and, a stream, its bytes,
+ * by the key of its number (pdf-lib encrypts the streams alone, and readers
+ * read its strings as encrypted).
+ */
+function encrypted(doc: PDFDocument, object: PDFObject, encrypt: Encrypt): PDFObject {
+  const { context } = doc;
+  const strings = (o: PDFObject): PDFObject => {
+    if (o instanceof PDFString || o instanceof PDFHexString) return PDFHexString.of(hex(encrypt(o.asBytes())));
+    if (o instanceof PDFArray) {
+      const out = PDFArray.withContext(context);
+      for (let i = 0; i < o.size(); i++) out.push(strings(o.get(i)));
+      return out;
+    }
+    if (o instanceof PDFDict) {
+      const out = context.obj({}) as unknown as PDFDict;
+      for (const [key, value] of o.entries()) out.set(key, strings(value));
+      return out;
+    }
+    return o;
+  };
+  if (object instanceof PDFStream) {
+    const contents = encrypt(object.getContents());
+    const dict = strings(object.dict) as PDFDict;
+    dict.set(PDFName.of('Length'), PDFNumber.of(contents.length));
+    return PDFRawStream.of(dict, contents);
+  }
+  return strings(object);
 }
 
 /** The places of the objects as a stream: a row of 7 bytes each, from object `first` on. */
@@ -104,6 +146,20 @@ async function xrefStream(out: Bytes, entries: Map<number, Entry>, number: numbe
   out.text(`${number} 0 obj\n<</Type /XRef /Size ${size} /W [1 4 2]${indexed}${extra} /Filter /FlateDecode /Length ${data.length}>>\nstream\n`);
   out.bytes(data);
   out.text(`\nendstream\nendobj\nstartxref\n${start}\n%%EOF\n`);
+}
+
+/** The places of the objects as a table, and the trailer after it. */
+function xrefTable(out: Bytes, entries: Map<number, Entry>, size: number, extra: string, index: [number, number][]) {
+  const start = out.offset;
+  let text = 'xref\n';
+  for (const [first, count] of index) {
+    text += `${first} ${count}\n`;
+    for (let i = first; i < first + count; i++) {
+      const [type, offset, generation] = entries.get(i) ?? (i === 0 ? [0, 0, 65535] : [0, 0, 0]);
+      text += `${String(offset).padStart(10, '0')} ${String(generation).padStart(5, '0')} ${type ? 'n' : 'f'}\r\n`;
+    }
+  }
+  out.text(`${text}trailer\n<</Size ${size}${extra}>>\nstartxref\n${start}\n%%EOF\n`);
 }
 
 /** Runs of numbers one after the other: [first, how many]. */
@@ -142,10 +198,14 @@ export async function writeDocument(doc: PDFDocument): Promise<Uint8Array> {
 
   const entries = new Map<number, Entry>();
   const packed: [PDFRef, PDFObject][] = [];
+  const cipher = cipherOf(doc);
   let n = 0;
   for (const [ref, object] of context.enumerateIndirectObjects()) {
     if (stale(object)) continue;
-    if (object instanceof PDFStream || ref.generationNumber !== 0 || !(object instanceof PDFDict || object instanceof PDFArray)) indirect(out, entries, ref, object);
+    // What says how the file is encrypted is not. Encrypted, nothing is packed: pdf-lib reads strings packed as encrypted each, as they are not.
+    const own = cipher && String(ref) === cipher.skip;
+    if (cipher || object instanceof PDFStream || ref.generationNumber !== 0 || !(object instanceof PDFDict || object instanceof PDFArray))
+      indirect(out, entries, ref, cipher && !own && !(object instanceof PDFInvalidObject) ? encrypted(doc, object, cipher.of(ref)) : object);
     else packed.push([ref, object]);
     if (++n % AT_ONCE === 0) await tick();
   }
@@ -171,7 +231,9 @@ export async function writeDocument(doc: PDFDocument): Promise<Uint8Array> {
     out.text('\nendstream\nendobj\n');
     next++;
   }
-  await xrefStream(out, entries, next, trailerOf(doc));
+  // Encrypted, the places of the objects go in a table, as pdf-lib reads the trailer of an encrypted file.
+  if (cipher) xrefTable(out, entries, next, trailerOf(doc), [[0, next]]);
+  else await xrefStream(out, entries, next, trailerOf(doc));
   return out.join();
 }
 
@@ -207,19 +269,7 @@ export async function writeIncrement(doc: PDFDocument): Promise<Uint8Array> {
   if (!table) {
     const number = context.largestObjectNumber + 1;
     await xrefStream(out, entries, number, extra, runs([...entries.keys(), number]));
-  } else {
-    const start = out.offset;
-    const size = context.largestObjectNumber + 1;
-    let text = 'xref\n';
-    for (const [first, count] of runs([...entries.keys()])) {
-      text += `${first} ${count}\n`;
-      for (let i = first; i < first + count; i++) {
-        const [type, offset, generation] = entries.get(i)!;
-        text += `${String(offset).padStart(10, '0')} ${String(generation).padStart(5, '0')} ${type ? 'n' : 'f'}\r\n`;
-      }
-    }
-    out.text(`${text}trailer\n<</Size ${size}${extra}>>\nstartxref\n${start}\n%%EOF\n`);
-  }
+  } else xrefTable(out, entries, context.largestObjectNumber + 1, extra, runs([...entries.keys()]));
   const all = new Uint8Array(original.length + out.length);
   all.set(original);
   all.set(out.join(), original.length);

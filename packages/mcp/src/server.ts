@@ -60,6 +60,9 @@ const OWN: (Omit<Tool, 'run' | 'writes'> & { annotations: Record<string, boolean
       document: DOCUMENT,
       file: { type: 'string', description: 'Where to write it. Its own file is written over only when named here.' },
       flatten: { type: 'boolean', description: 'Draws fields and marks into the pages.' },
+      password: { type: 'string', description: 'Encrypts it (AES-256): it opens only with this password. Only when the person asks for it, and give them the password.' },
+      no_copying: { type: 'boolean', description: 'With a password: its text may not be copied.' },
+      no_printing: { type: 'boolean', description: 'With a password: it may not be printed.' },
     },
   },
   {
@@ -234,13 +237,15 @@ export function createPdfServer(options: ServerOptions = {}) {
       case 'save_pdf': {
         const doc = document(args.document);
         const target = args.file ? allowed(String(args.file)) : doc.file.replace(/(\.pdf)?$/i, (ext) => ` (edited)${ext || '.pdf'}`);
-        const incremental = savesIncrementally(doc.pdf);
-        const bytes = await savePdf(doc.pdf, { flatten: !!args.flatten, font: await fontBytes() });
+        const protect = args.password ? { password: String(args.password), permissions: { copying: !args.no_copying, printing: !args.no_printing } } : undefined;
+        const incremental = savesIncrementally(doc.pdf, 'auto', protect);
+        const bytes = await savePdf(doc.pdf, { flatten: !!args.flatten, font: await fontBytes(), protect });
         await writeFile(target, bytes);
         if (target === doc.file) doc.unsaved = false;
         const blacked = doc.pdf.marks.filter((m) => m.kind === 'redaction').length;
         const notes = [
           blacked && `${blacked} ${blacked === 1 ? 'part' : 'parts'} blacked out for good: what was under them is not in the file`,
+          protect && 'encrypted: it opens only with the password',
           doc.pdf.signatures?.length && (incremental ? 'added after its digital signature, which still holds' : `its digital signature no longer holds: ${whyNotIncremental(doc.pdf)}`),
         ].filter(Boolean);
         // The PDF open is the one saved: what is blacked out is gone from it too.

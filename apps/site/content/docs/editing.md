@@ -32,3 +32,13 @@ The thumbnails at the side act on the pages chosen (a click; Shift or ⌘ for mo
 ## Undo
 
 ⌘Z and ⇧⌘Z go through every change, what was typed in fields included.
+
+## Protected by a password
+
+Download with a password… (in the menu ⋯) encrypts the PDF with AES-256: it opens only with the password, and what it does not allow (printing, copying its text, changing it) readers do not offer. In code:
+
+```ts
+const bytes = await savePdf(pdf, { protect: { password: 'abre', permissions: { copying: false } } });
+```
+
+`ownerPassword` opens it for everything; left out, no one may do more than the password lets. A PDF protected by a password opens in ReboPDF asking for it.

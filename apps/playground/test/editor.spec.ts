@@ -664,3 +664,22 @@ test('two people work on a PDF at once: what one does, the other sees', async ({
     server.close();
   }
 });
+
+test('a PDF is downloaded with a password, and opens with it alone', async ({ page }) => {
+  await page.getByRole('button', { name: 'More' }).click();
+  await page.getByRole('menuitem', { name: /Download with a password/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'Download with a password' });
+  await dialog.getByLabel('Password', { exact: true }).fill('abre');
+  await dialog.getByLabel('The password again').fill('otra');
+  await dialog.getByRole('button', { name: 'Download' }).click();
+  await expect(dialog.getByRole('alert')).toHaveText('The two passwords are not the same.');
+  const results = await new AxeBuilder({ page }).include('.rp-dialog').analyze();
+  expect(results.violations.map((v) => v.id)).toEqual([]);
+  await dialog.getByLabel('The password again').fill('abre');
+  await dialog.getByLabel('Its text may be copied').uncheck();
+  const waiting = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Download' }).click();
+  const bytes = new Uint8Array(Buffer.concat(await (await (await waiting).createReadStream()).toArray()));
+  await expect(openPdf(bytes)).rejects.toThrow();
+  expect((await openPdf(bytes, { password: 'abre' })).pages).toHaveLength(2);
+});
