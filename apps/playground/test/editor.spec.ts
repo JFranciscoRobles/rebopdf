@@ -160,6 +160,43 @@ test('a mark is chosen, moved by the arrows, coloured and taken off, and comes b
   await expect(page.getByRole('button', { name: 'Note: Hello there' })).toBeVisible();
 });
 
+test('a signature is dragged all the way, over a field too, and made bigger by its corner', async ({ page }) => {
+  await page.locator('.rp-scroll').click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press('s');
+  const pad = (await page.locator('.rp-pad').boundingBox())!;
+  await page.mouse.move(pad.x + 40, pad.y + 120);
+  await page.mouse.down();
+  await page.mouse.move(pad.x + 200, pad.y + 60, { steps: 6 });
+  await page.mouse.up();
+  await page.getByRole('button', { name: 'Place it' }).click();
+  const one = (await pageEl(page, 1).boundingBox())!;
+  await page.mouse.click(one.x + 200, one.y + 400);
+  const sig = pageEl(page, 1).locator('.rp-mark-signature');
+  /** Dragged in many small moves, as a hand does: each one draws the marks again. */
+  const drag = async (x: number, y: number, dx: number, dy: number) => {
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + dx, y + dy, { steps: 20 });
+    await page.mouse.up();
+  };
+  const a = (await sig.boundingBox())!;
+  await drag(a.x + a.width / 2, a.y + a.height / 2, 200, 100);
+  await expect.poll(async () => Math.round((await sig.boundingBox())!.x - a.x)).toBe(200);
+  // Now over the email field: pressed there, it is the signature that is taken.
+  const b = (await sig.boundingBox())!;
+  await page.mouse.click(one.x + 600, one.y + 150);
+  await drag(b.x + 6, b.y + 6, -100, 100);
+  await expect.poll(async () => Math.round((await sig.boundingBox())!.x - b.x)).toBe(-100);
+  const c = (await sig.boundingBox())!;
+  await sig.click();
+  const corner = (await page.locator('.rp-handle').boundingBox())!;
+  await drag(corner.x + corner.width / 2, corner.y + corner.height / 2, 80, 0);
+  await expect.poll(async () => Math.round((await sig.boundingBox())!.width - c.width)).toBe(80);
+  // Each is one step to undo.
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect.poll(async () => Math.round((await sig.boundingBox())!.width)).toBe(Math.round(c.width));
+});
+
 test('pages are turned, moved, deleted and taken out, and the undo brings them back', async ({ page }) => {
   const thumbs = page.locator('.rp-thumb');
   await expect(thumbs).toHaveCount(2);

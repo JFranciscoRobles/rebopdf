@@ -195,6 +195,13 @@ The first version to go to npm: 0.1.0 never went, and what it has is here.
 
 ### Fixed
 
+- A mark dragged went with the pointer only its first move: the marks are
+  drawn again as it moves, and the one that held the pointer was let go.
+  The page holds it now, for moving and for the corner that makes it
+  bigger, and the marks are drawn once a frame. A mark over a field of the
+  form is taken by the pointer there, not the field under it; a finger on
+  a signature, a text or a note drags it, not the pages.
+
 - A form filled after it was signed is classified as form filling by
   readers of signatures (pyHanko), not as any other change: the fields
   ReboPDF makes are one object with their widget, and a note put on a page

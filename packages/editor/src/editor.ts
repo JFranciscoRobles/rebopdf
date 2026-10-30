@@ -1168,22 +1168,37 @@ export class Editor {
     const start = at.point;
     const from = this.current!;
     let moved = false;
-    const target = event.target as Element;
+    // The page holds the pointer, not the mark: the marks are drawn again as it moves, and a mark drawn again would let it go.
+    const target = at.el;
     target.setPointerCapture?.(event.pointerId);
+    let frame = 0;
+    let last: PointerEvent | undefined;
+    const draw = () => {
+      frame = 0;
+      if (!last) return;
+      const box = at.el.getBoundingClientRect();
+      const now = at.geo.toPage({ x: last.clientX - box.left, y: last.clientY - box.top });
+      this.current = updateMark(from, mark.id, moveBy(mark, { x: now.x - start.x, y: now.y - start.y }));
+      this.viewer?.setPdf(this.current);
+      this.showChosen();
+    };
     const move = (e: PointerEvent) => {
-      const now = at.geo.toPage({ x: e.clientX - at.el.getBoundingClientRect().left, y: e.clientY - at.el.getBoundingClientRect().top });
-      const d = { x: now.x - start.x, y: now.y - start.y };
+      if (e.pointerId !== event.pointerId) return;
       if (!moved && Math.hypot(e.clientX - event.clientX, e.clientY - event.clientY) < 4) return;
       if (mark.kind === 'highlight') return;
       moved = true;
-      this.current = updateMark(from, mark.id, moveBy(mark, d));
-      this.viewer?.setPdf(this.current);
-      this.showChosen();
+      last = e;
+      // Once a frame, however many moves the pointer tells.
+      frame ||= requestAnimationFrame(draw);
     };
     const up = () => {
       target.removeEventListener('pointermove', move as EventListener);
       target.removeEventListener('pointerup', up);
       target.removeEventListener('pointercancel', up);
+      if (frame) {
+        cancelAnimationFrame(frame);
+        draw();
+      }
       if (moved) {
         const after = this.current!;
         this.current = from;
@@ -1234,8 +1249,9 @@ export class Editor {
     event.preventDefault();
     event.stopPropagation();
     const handle = event.currentTarget as HTMLElement;
-    handle.setPointerCapture(event.pointerId);
     const pageEl = handle.closest<HTMLElement>('.rp-page')!;
+    // The page holds the pointer: the corner is put again as the mark grows.
+    pageEl.setPointerCapture(event.pointerId);
     const from = this.current!;
     const top = mark.rect.y + mark.rect.height;
     const aspect = mark.rect.width / mark.rect.height;
@@ -1252,14 +1268,16 @@ export class Editor {
       this.showChosen();
     };
     const up = () => {
-      handle.removeEventListener('pointermove', move);
-      handle.removeEventListener('pointerup', up);
+      pageEl.removeEventListener('pointermove', move);
+      pageEl.removeEventListener('pointerup', up);
+      pageEl.removeEventListener('pointercancel', up);
       const after = this.current!;
       this.current = from;
       this.commit(after, '', false);
     };
-    handle.addEventListener('pointermove', move);
-    handle.addEventListener('pointerup', up);
+    pageEl.addEventListener('pointermove', move);
+    pageEl.addEventListener('pointerup', up);
+    pageEl.addEventListener('pointercancel', up);
   }
 
   /**

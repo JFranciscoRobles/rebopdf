@@ -18,12 +18,16 @@ const CSS = `
 .rp-root:not([data-tool="select"]) .rp-fields { display: none; }
 .rp-root:not([data-tool="select"]):not([data-tool="highlight"]) .rp-links { display: none; }
 .rp-root[data-tool="select"] .rp-mark { pointer-events: auto; cursor: pointer; }
+/* A mark put over a field is taken by the pointer there, not the field under it: where it is not, the field is filled as ever. */
+.rp-root[data-tool="select"] .rp-page > .rp-marks { z-index: 1; }
+/* What is moved by dragging says so, and a finger on it drags it, not the pages. */
+.rp-root[data-tool="select"] .rp-mark:is(.rp-mark-signature, .rp-mark-text, .rp-mark-note) { cursor: move; touch-action: none; }
 .rp-root[data-tool="select"] .rp-mark-ink { pointer-events: none; }
 .rp-root[data-tool="select"] .rp-mark-ink path { pointer-events: stroke; cursor: pointer; }
 .rp-root[data-tool="highlight"] .textLayer :is(span, br) { cursor: text; }
 .rp-root .rp-mark.rp-chosen { outline: 2px solid var(--rp-focus); outline-offset: 2px; }
 .rp-root .rp-mark-ink path.rp-chosen { filter: drop-shadow(0 0 2px var(--rp-focus)); }
-.rp-handle { position: absolute; z-index: 3; width: 12px; height: 12px; margin: -6px 0 0 -6px; border: 2px solid var(--rp-focus); border-radius: 50%; background: #fff; cursor: nwse-resize; pointer-events: auto; touch-action: none; }
+.rp-handle { position: absolute; z-index: 3; width: 14px; height: 14px; margin: -7px 0 0 -7px; border: 2px solid var(--rp-focus); border-radius: 50%; background: #fff; cursor: nwse-resize; pointer-events: auto; touch-action: none; }
 .rp-drawing { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
 
 .rp-swatch-button { position: relative; }
@@ -102,7 +106,7 @@ const CSS = `
 .rp-replies li p { grid-column: 1 / -1; margin: 0; white-space: pre-wrap; }
 .rp-replies time { color: var(--rp-muted); font-size: 11.5px; }
 .rp-replies li .rp-button { width: 24px; height: 24px; }
-@media (pointer: coarse) { .rp-outline-more.rp-button { opacity: 1; } .rp-outline-item .rp-outline-page { visibility: hidden; } }
+@media (pointer: coarse) { .rp-handle { width: 24px; height: 24px; margin: -12px 0 0 -12px; } .rp-outline-more.rp-button { opacity: 1; } .rp-outline-item .rp-outline-page { visibility: hidden; } }
 .rp-dialog-problem { margin: 0; min-height: 1em; color: #c92a2a; font-size: 13px; }
 .rp-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .rp-upload-preview { display: grid; place-items: center; height: 140px; border: 1px dashed var(--rp-border-strong); border-radius: 10px; background: #fff; }
