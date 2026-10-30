@@ -21,3 +21,9 @@ mountEditor(elemento, { pdf, recognize: recognizeText });
 ```
 
 Los datos de cada idioma se descargan la primera vez que hacen falta (`langPath` dice de dónde) y se guardan (`cachePath` en Node). Tesseract puede no leer un título grande junto a una franja oscura de un escaneo.
+
+## Páginas escaneadas chuecas, y sus idiomas
+
+Una página que entró chueca al escáner se endereza antes de leerla: se mide cuánto se inclinan sus renglones (entre -6° y 6°), se gira la imagen, y las palabras encontradas se ponen donde están en la página tal como se escaneó, leídas renglón por renglón como se leyeron. `deskew: false` la deja como está.
+
+Los idiomas son los que conoce Tesseract, por sus nombres: `languages: ['eng', 'fra']`. En el editor, Reconocer texto pregunta cuáles, y los recuerda. Cada uno se descarga la primera vez que hace falta. Tesseract lee en un worker propio; lo que hace ReboPDF alrededor deja que la página responda entre páginas.

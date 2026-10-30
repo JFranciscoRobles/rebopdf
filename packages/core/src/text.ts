@@ -66,14 +66,20 @@ export async function pageText(pdf: Pdf, id: string): Promise<PageText> {
   if (words?.length) {
     if (text && !text.endsWith('\n')) text += '\n';
     const lines: Word[][] = [];
-    for (const word of [...words].sort((a, b) => b.rect.y + b.rect.height / 2 - (a.rect.y + a.rect.height / 2) || a.rect.x - b.rect.x)) {
-      const line = lines.at(-1);
-      const middle = word.rect.y + word.rect.height / 2;
-      if (line && Math.abs(line[0].rect.y + line[0].rect.height / 2 - middle) < Math.min(line[0].rect.height, word.rect.height) / 2) line.push(word);
-      else lines.push([word]);
-    }
+    if (words.every((word) => word.line !== undefined)) {
+      // As they were read, a line at a time.
+      const byLine = new Map<number, Word[]>();
+      for (const word of words) byLine.set(word.line!, [...(byLine.get(word.line!) ?? []), word]);
+      lines.push(...[...byLine.entries()].sort(([a], [b]) => a - b).map(([, line]) => line));
+    } else
+      for (const word of [...words].sort((a, b) => b.rect.y + b.rect.height / 2 - (a.rect.y + a.rect.height / 2) || a.rect.x - b.rect.x)) {
+        const line = lines.at(-1);
+        const middle = word.rect.y + word.rect.height / 2;
+        if (line && Math.abs(line[0].rect.y + line[0].rect.height / 2 - middle) < Math.min(line[0].rect.height, word.rect.height) / 2) line.push(word);
+        else lines.push([word]);
+      }
     for (const line of lines) {
-      line.sort((a, b) => a.rect.x - b.rect.x);
+      if (line[0].line === undefined) line.sort((a, b) => a.rect.x - b.rect.x);
       line.forEach((word, i) => {
         const pieces = outside(word.text, word.rect, redacted);
         pieces.forEach((piece, j) => {

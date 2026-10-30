@@ -157,6 +157,10 @@ The first version to go to npm: 0.1.0 never went, and what it has is here.
   password… in the editor; `password` of `save_pdf`): encrypted with
   AES-256, with what may be done with it opened (printed, copied, changed).
   Its strings are encrypted with its streams, which pdf-lib left out.
+- Recognizing text straightens a page scanned askew first (`deskew`, by
+  the projection of its rows of ink), puts the words back where they are on
+  the page as scanned, and keeps the lines as they were read (`line` of a
+  word). The editor asks the languages of the pages, among fifteen.
 - Recognizing text reads again, each on its own, the strips of a page with
   ink and no word read: a big title the layout of the whole page leaves
   out, as under a dark band, is read.

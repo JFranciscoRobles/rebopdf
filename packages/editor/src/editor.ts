@@ -119,6 +119,25 @@ const TOOLS: { tool: Tool; icon: IconName; key: string }[] = [
 
 const HISTORY = 100;
 
+/** The languages offered to recognize text in, as Tesseract names them, each by its own name. */
+const OCR_LANGUAGES: [string, string][] = [
+  ['eng', 'English'],
+  ['spa', 'Español'],
+  ['fra', 'Français'],
+  ['deu', 'Deutsch'],
+  ['por', 'Português'],
+  ['ita', 'Italiano'],
+  ['nld', 'Nederlands'],
+  ['pol', 'Polski'],
+  ['tur', 'Türkçe'],
+  ['rus', 'Русский'],
+  ['ukr', 'Українська'],
+  ['ell', 'Ελληνικά'],
+  ['jpn', '日本語'],
+  ['chi_sim', '简体中文'],
+  ['kor', '한국어'],
+];
+
 export class Editor {
   readonly t: EditorStrings;
   /** The viewer the editor works in; none while there is no PDF. */
@@ -334,11 +353,10 @@ export class Editor {
   }
 
   /** Reads the text of the pages that are pictures (scans), to be found, selected and blacked out. */
-  async recognizeText(): Promise<void> {
+  async recognizeText(languages = this.ocrLanguages): Promise<void> {
     const pdf = this.current;
     if (!pdf || !this.options.recognize) return;
     this.toast(this.t.recognizing);
-    const languages = this.options.locale?.startsWith('es') ? ['spa', 'eng'] : ['eng', 'spa'];
     const read = await this.options.recognize(pdf, { languages, onProgress: (done, total) => this.toast(fill(this.t.recognizingPages, { done, total })) });
     if (read === pdf) {
       this.toast(this.t.nothingToRecognize);
@@ -347,6 +365,42 @@ export class Editor {
     this.commit(read);
     const pages = Object.keys(read.recognized ?? {}).length;
     this.toast(fill(this.t.recognized, { n: pages }));
+  }
+
+  /** The languages text is recognized in: those of the editor's language first, until others are chosen. */
+  private ocrChosen?: string[];
+  private get ocrLanguages(): string[] {
+    return this.ocrChosen ?? (this.options.locale?.startsWith('es') ? ['spa', 'eng'] : ['eng', 'spa']);
+  }
+
+  /** Asks which languages the scanned pages are in, and reads them. */
+  private askLanguages(anchor: DOMRect) {
+    const t = this.t;
+    const box = this.doc.createElement('fieldset');
+    box.className = 'rp-languages';
+    const legend = this.doc.createElement('legend');
+    legend.textContent = t.ocrLanguages;
+    box.append(legend);
+    const boxes = OCR_LANGUAGES.map(([code, name]) => {
+      const input = Object.assign(this.doc.createElement('input'), { type: 'checkbox', value: code, checked: this.ocrLanguages.includes(code) });
+      const label = this.doc.createElement('label');
+      label.append(input, name);
+      box.append(label);
+      return input;
+    });
+    const read = this.doc.createElement('button');
+    read.type = 'button';
+    read.className = 'rp-button rp-primary';
+    read.textContent = t.readNow;
+    read.addEventListener('click', () => {
+      const chosen = boxes.filter((b) => b.checked).map((b) => b.value);
+      if (!chosen.length) return;
+      this.ocrChosen = chosen;
+      this.closePop();
+      void this.recognizeText(chosen);
+    });
+    this.openPop(anchor, [box, this.row([], [read])]);
+    boxes[0]?.focus();
   }
 
   /** Compares the PDF with another version of it, from a file: what changed, side by side. */
@@ -1802,7 +1856,7 @@ export class Editor {
       item('lock', t.downloadProtected, t.downloadProtectedHint, () => void this.downloadProtected()),
       item('signature', t.signDigitally, t.signDigitallyHint, () => void this.signDigitally()),
       ...(this.options.files !== false ? [item('layers', t.compareWith, t.compareHint, () => void this.compareWith())] : []),
-      ...(this.options.recognize ? [item('text', t.recognize, t.recognizeHint, () => void this.recognizeText())] : []),
+      ...(this.options.recognize ? [item('text', t.recognize, t.recognizeHint, () => this.askLanguages(anchor.getBoundingClientRect()))] : []),
       ...(this.history.length ? [item('undo', t.history, fill(t.historyHint, { n: this.history.length }), () => this.showHistory(anchor.getBoundingClientRect()))] : []),
       ...(this.options.menu ?? []).map((own) => item(own.icon, own.label, own.hint ?? '', own.run)),
     ];

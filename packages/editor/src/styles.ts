@@ -90,6 +90,9 @@ const CSS = `
 .rp-history li { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .rp-history time { margin-left: auto; color: var(--rp-muted); font-size: 11.5px; }
 .rp-history .rp-swatch { width: 10px; height: 10px; }
+.rp-languages { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 14px; margin: 0; padding: 0; border: 0; font-size: 13px; }
+.rp-languages legend { grid-column: 1 / -1; margin-bottom: 6px; color: var(--rp-muted); font-size: 12.5px; }
+.rp-languages label { display: flex; align-items: center; gap: 6px; }
 .rp-replies { display: grid; gap: 6px; }
 .rp-replies ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 180px; overflow-y: auto; }
 .rp-replies li { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 2px 8px; padding: 6px 8px; border-radius: 8px; background: var(--rp-hover); font-size: 12.5px; }

@@ -616,6 +616,11 @@ test('the text of a scanned page is recognized, found and selected', async ({ pa
   await expect(page.locator('.rp-title')).toHaveText('Scan');
   await page.getByRole('button', { name: 'More' }).click();
   await page.getByRole('menuitem', { name: /Recognize text/ }).click();
+  // The languages of the pages: English alone.
+  const languages = page.getByRole('group', { name: 'The languages of the pages' });
+  await languages.getByRole('checkbox', { name: 'Español' }).uncheck();
+  await expect(languages.getByRole('checkbox', { name: 'English' })).toBeChecked();
+  await page.getByRole('button', { name: 'Read them' }).click();
   await expect(toast(page)).toHaveText(/Read the text of 1 pages/, { timeout: 100_000 });
   await expect(pageEl(page, 1).locator('.rp-recognized span', { hasText: 'agreement' }).first()).toBeAttached();
   await page.locator('.rp-scroll').focus();

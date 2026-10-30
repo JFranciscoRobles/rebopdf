@@ -213,6 +213,8 @@ export interface Attachment {
 export interface Word {
   text: string;
   rect: Rect;
+  /** The line it was read in, as what read it says: the lines of a page scanned askew are not level on it. */
+  line?: number;
 }
 
 /** A digital signature a file carries. */
