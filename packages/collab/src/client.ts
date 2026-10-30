@@ -5,7 +5,7 @@
 // room's file and makes on it what was done in the room until then.
 
 import { type Mark, openPdf, type Pdf, savePdf } from '@rebopdf/core';
-import { applyOps, diffPdfs, type Op, type Peer, PREFIX } from './protocol';
+import { applyOps, describeOp, diffPdfs, type Entry, type Op, type Peer, PREFIX, type Role } from './protocol';
 
 /** What of an editor (of @rebopdf/editor) a room needs. */
 export interface CollabEditor {
@@ -16,6 +16,10 @@ export interface CollabEditor {
   applyRemote(change: (pdf: Pdf) => Pdf): void;
   setPeers(peers: { name: string; color: string; page?: string }[]): void;
   lockPages(locked: boolean): void;
+  /** What its person may do in the room: the editor offers that alone. */
+  setRole?(role: Role): void;
+  /** Who did what in the room, and when: the editor shows it. */
+  setHistory?(entries: { by: string; color: string; at: string; what: (locale: string) => string }[]): void;
 }
 
 export interface RoomOptions {
@@ -30,6 +34,14 @@ export interface RoomOptions {
 
 export interface Session {
   readonly room: string;
+  /** What its person may do in the room. */
+  readonly role: Role;
+  /** The keys of the room, to send: given to who shared it. */
+  readonly keys?: Record<Role, string>;
+  /** Who did what in the room, and when, in its order. */
+  readonly history: Entry[];
+  /** Told as the history grows. */
+  onHistory?: (history: Entry[]) => void;
   /** The others in the room now. */
   readonly peers: Peer[];
   /** Told the others in the room, as they come, go and move. */
@@ -65,16 +77,25 @@ export async function shareEditor(editor: CollabEditor, options: RoomOptions): P
     body: JSON.stringify({ name: pdf.name, pdf: toBase64(base) }),
   });
   if (!response.ok) throw new Error(((await response.json().catch(() => ({}))) as { error?: string }).error ?? `The server said ${response.status}.`);
-  const { room } = (await response.json()) as { room: string };
+  const { room, keys } = (await response.json()) as { room: string; keys: Record<Role, string> };
   const opened = await openPdf(base, { name: pdf.name, marks: false });
   const ops = marksAsOps(pdf);
   editor.setPdf(applyOps(opened, ops));
-  return connect(editor, room, options, ops);
+  return connect(editor, room, { ...options, key: keys.edit }, ops, keys);
+}
+
+/** The address of a room to send, for a role: the page's, with the room and its key. */
+export function roomAddress(page: string, session: Session, role: Role): string {
+  const url = new URL(page);
+  url.searchParams.set('room', session.room);
+  url.searchParams.set('key', session.keys?.[role] ?? '');
+  return url.toString();
 }
 
 /** Opens the PDF of a room in the editor, and works in it. */
-export async function joinRoom(editor: CollabEditor, options: RoomOptions & { room: string }): Promise<Session> {
-  const response = await fetch(`${options.url}${PREFIX}/rooms/${encodeURIComponent(options.room)}/pdf`);
+export async function joinRoom(editor: CollabEditor, options: RoomOptions & { room: string; key: string }): Promise<Session> {
+  const response = await fetch(`${options.url}${PREFIX}/rooms/${encodeURIComponent(options.room)}/pdf?key=${encodeURIComponent(options.key)}`);
+  if (response.status === 403) throw new Error('The key of this address does not open the room.');
   if (!response.ok) throw new Error('There is no such room.');
   const name = decodeURIComponent(/filename\*=UTF-8''([^;]+)/.exec(response.headers.get('content-disposition') ?? '')?.[1] ?? 'document.pdf');
   editor.setPdf(await openPdf(new Uint8Array(await response.arrayBuffer()), { name, marks: false }));
@@ -82,7 +103,7 @@ export async function joinRoom(editor: CollabEditor, options: RoomOptions & { ro
 }
 
 /** Listens to a room and sends to it: the operations of the editor, as they are made, and the page in view. */
-function connect(editor: CollabEditor, room: string, options: RoomOptions, first: Op[]): Session {
+function connect(editor: CollabEditor, room: string, options: RoomOptions & { key: string }, first: Op[], keys?: Record<Role, string>): Session {
   const client = Math.random().toString(36).slice(2, 12);
   const color = options.color ?? COLORS[Math.floor(Math.random() * COLORS.length)];
   const base = `${options.url}${PREFIX}/rooms/${encodeURIComponent(room)}`;
@@ -91,6 +112,13 @@ function connect(editor: CollabEditor, room: string, options: RoomOptions, first
   let pending: Op[] = [...first];
   let closed = false;
   let listening = false;
+  let role: Role = keys ? 'edit' : 'view';
+  const history: Entry[] = [];
+  const grow = (entries: Entry[]) => {
+    history.push(...entries);
+    session.onHistory?.(history);
+    editor.setHistory?.(history.map((e) => ({ by: e.by, color: e.color, at: e.at, what: (locale: string) => describeOp(e.op, locale) })));
+  };
   const abort = new AbortController();
 
   const showPeers = () => {
@@ -107,6 +135,7 @@ function connect(editor: CollabEditor, room: string, options: RoomOptions, first
     const ops = pending;
     pending = [];
     void post('ops', { ops });
+    grow(ops.map((op) => ({ op, by: options.name, color, at: new Date().toISOString() })));
   };
   const queue = (ops: Op[]) => {
     pending.push(...ops);
@@ -133,15 +162,32 @@ function connect(editor: CollabEditor, room: string, options: RoomOptions, first
 
   const events = (event: string, data: Record<string, unknown>) => {
     if (event === 'hello') {
-      const ops = data.ops as Op[];
-      if (ops.length) editor.applyRemote((pdf) => applyOps(pdf, ops));
+      const entries = data.entries as Entry[];
+      role = data.role as Role;
+      editor.setRole?.(role);
+      // What was done before is made once: heard again after the stream broke, the history starts over.
+      if (!history.length && entries.length) {
+        editor.applyRemote((pdf) =>
+          applyOps(
+            pdf,
+            entries.map((e) => e.op),
+          ),
+        );
+        grow(entries);
+      }
       for (const peer of data.peers as Peer[]) if (peer.client !== client) peers.set(peer.client, peer);
       listening = true;
       flush();
       showPeers();
     } else if (event === 'ops' && data.client !== client) {
-      const ops = data.ops as Op[];
-      editor.applyRemote((pdf) => applyOps(pdf, ops));
+      const entries = data.entries as Entry[];
+      editor.applyRemote((pdf) =>
+        applyOps(
+          pdf,
+          entries.map((e) => e.op),
+        ),
+      );
+      grow(entries);
       showPeers();
     } else if (event === 'presence' && data.client !== client) {
       peers.set(data.client as string, data as unknown as Peer);
@@ -156,7 +202,7 @@ function connect(editor: CollabEditor, room: string, options: RoomOptions, first
   const listen = async () => {
     while (!closed) {
       try {
-        const query = new URLSearchParams({ client, name: options.name, color });
+        const query = new URLSearchParams({ client, name: options.name, color, key: options.key });
         const response = await fetch(`${base}/events?${query}`, { signal: abort.signal });
         if (!response.body) throw new Error('No stream');
         const reader = response.body.getReader();
@@ -187,6 +233,11 @@ function connect(editor: CollabEditor, room: string, options: RoomOptions, first
 
   const session: Session = {
     room,
+    get role() {
+      return role;
+    },
+    keys,
+    history,
     get peers() {
       return [...peers.values()];
     },
@@ -198,6 +249,8 @@ function connect(editor: CollabEditor, room: string, options: RoomOptions, first
       unpage();
       editor.lockPages(false);
       editor.setPeers([]);
+      editor.setRole?.('edit');
+      editor.setHistory?.([]);
     },
   };
   return session;

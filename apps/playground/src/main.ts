@@ -4,7 +4,7 @@
 // menu shares the PDF to work on it together, and &room=<id> joins a room.
 
 import { samplePdf, usePdfAssets, usePdfWorker } from '@rebopdf/core';
-import { joinRoom, shareEditor } from '@rebopdf/collab';
+import { joinRoom, roomAddress, shareEditor } from '@rebopdf/collab';
 import { mountEditor } from '@rebopdf/editor';
 import { recognizeText } from '@rebopdf/ocr';
 import { mountViewer } from '@rebopdf/viewer';
@@ -37,8 +37,10 @@ if (params.has('viewer')) {
             hint: locale === 'es' ? 'Un enlace para que otros lo vean y cambien a la vez' : 'A link for others to see it and change it at once',
             run: async () => {
               const session = await shareEditor(editor, { url: collab, name });
-              const link = `${location.origin}${location.pathname}?collab=${encodeURIComponent(collab)}&room=${session.room}`;
-              Object.assign(window, { session, link });
+              const page = `${location.origin}${location.pathname}?collab=${encodeURIComponent(collab)}`;
+              const links = { edit: roomAddress(page, session, 'edit'), comment: roomAddress(page, session, 'comment'), view: roomAddress(page, session, 'view') };
+              const link = links.edit;
+              Object.assign(window, { session, link, links });
               await navigator.clipboard?.writeText(link).catch(() => undefined);
               editor.notify(locale === 'es' ? `Enlace copiado: ${link}` : `Link copied: ${link}`);
             },
@@ -46,6 +48,6 @@ if (params.has('viewer')) {
         ]
       : [],
   });
-  if (collab && room) Object.assign(window, { session: await joinRoom(editor, { url: collab, room, name }) });
+  if (collab && room) Object.assign(window, { session: await joinRoom(editor, { url: collab, room, key: params.get('key') ?? '', name }) });
   Object.assign(window, { editor });
 }

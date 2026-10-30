@@ -86,6 +86,16 @@ const CSS = `
 .rp-outline-tools .rp-button { width: 24px; height: 24px; }
 .rp-outline-name { flex: 1; min-width: 0; height: 28px; font-size: 13px; }
 .rp-file .rp-button { width: 26px; height: 26px; flex: none; }
+.rp-history { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 320px; overflow-y: auto; min-width: 260px; font-size: 12.5px; }
+.rp-history li { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.rp-history time { margin-left: auto; color: var(--rp-muted); font-size: 11.5px; }
+.rp-history .rp-swatch { width: 10px; height: 10px; }
+.rp-replies { display: grid; gap: 6px; }
+.rp-replies ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 180px; overflow-y: auto; }
+.rp-replies li { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 2px 8px; padding: 6px 8px; border-radius: 8px; background: var(--rp-hover); font-size: 12.5px; }
+.rp-replies li p { grid-column: 1 / -1; margin: 0; white-space: pre-wrap; }
+.rp-replies time { color: var(--rp-muted); font-size: 11.5px; }
+.rp-replies li .rp-button { width: 24px; height: 24px; }
 @media (pointer: coarse) { .rp-outline-tools { opacity: 1; } }
 .rp-dialog-problem { margin: 0; min-height: 1em; color: #c92a2a; font-size: 13px; }
 .rp-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }

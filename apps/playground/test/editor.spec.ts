@@ -784,3 +784,54 @@ test('the text of a page is written again: the old taken out of the file, the ne
   expect(text).not.toContain('1. The work');
   expect(text).toContain('The provider designs and builds the website');
 });
+
+test('who comments in a room notes and replies alone, and the history says who did what', async ({ browser }) => {
+  const { createCollabServer } = await import('@rebopdf/collab/server');
+  const server = createCollabServer({ port: 0 });
+  await server.ready;
+  const collab = `http://127.0.0.1:${server.port}`;
+  try {
+    const ana = await browser.newPage();
+    await ana.goto(`/?collab=${encodeURIComponent(collab)}&name=Ana`);
+    await expect(pageEl(ana, 1).locator('canvas')).toHaveCount(1);
+    await ana.getByRole('button', { name: 'More' }).click();
+    await ana.getByRole('menuitem', { name: /Work on it with others/ }).click();
+    await expect(toast(ana)).toHaveText(/Link copied/);
+    const links = await ana.evaluate(() => (window as unknown as { links: Record<string, string> }).links);
+
+    const eva = await browser.newPage();
+    await eva.goto(`${links.comment}&name=Eva`);
+    await expect(pageEl(eva, 1).locator('canvas')).toHaveCount(1);
+    // Notes alone: the other tools are not offered, and the form is not filled.
+    await expect(eva.getByRole('button', { name: 'Note', exact: true })).toBeVisible();
+    await expect(eva.getByRole('button', { name: 'Highlight', exact: true })).toBeHidden();
+    await expect(eva.getByRole('textbox', { name: 'Full name' })).toBeDisabled();
+    const box = (await pageEl(eva, 1).boundingBox())!;
+    await eva.locator('.rp-scroll').focus();
+    await eva.keyboard.press('n');
+    await eva.mouse.click(box.x + box.width - 80, box.y + 140);
+    await eva.getByRole('textbox', { name: 'What the note says' }).fill('¿Treinta días?');
+    await eva.getByRole('button', { name: 'Add' }).click();
+    await expect(ana.getByRole('button', { name: 'Note: ¿Treinta días?' })).toBeVisible();
+
+    // Ana replies; Eva sees the reply.
+    await ana.getByRole('button', { name: 'Note: ¿Treinta días?' }).click();
+    const reply = ana.getByRole('textbox', { name: 'Reply' });
+    await reply.fill('Así lo pide el cliente.');
+    await reply.press('Enter');
+    await expect(ana.getByRole('list', { name: 'Replies' })).toContainText('Así lo pide el cliente.');
+    await expect.poll(() => eva.evaluate(() => (window as unknown as { editor: { pdf: { marks: { replies?: unknown[] }[] } } }).editor.pdf.marks[0]?.replies?.length ?? 0)).toBe(1);
+    await eva.getByRole('button', { name: 'Note: ¿Treinta días?' }).click();
+    await expect(eva.getByRole('list', { name: 'Replies' })).toContainText('Así lo pide el cliente.');
+
+    // Who did what.
+    await ana.keyboard.press('Escape');
+    await ana.getByRole('button', { name: 'More' }).click();
+    await ana.getByRole('menuitem', { name: /History of the room/ }).click();
+    const history = ana.getByRole('list', { name: 'History of the room' });
+    await expect(history).toContainText('Eva put or changed a note on page 1');
+    await expect(history).toContainText('Ana put or changed a note on page 1');
+  } finally {
+    server.close();
+  }
+});

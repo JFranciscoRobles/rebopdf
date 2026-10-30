@@ -524,7 +524,29 @@ async function putMark(doc: PDFDocument, page: PDFPage, mark: Mark, flatten: boo
     dict.BS = { W: mark.width, S: 'S' };
   }
   const annot = doc.context.obj(dict as never);
-  annotate(page, doc.context.register(annot));
+  const ref = doc.context.register(annot);
+  annotate(page, ref);
+  // Its replies, each an annotation in reply to it, as readers show them under it.
+  if (mark.kind === 'note')
+    for (const reply of mark.replies ?? []) {
+      const answer = doc.context.obj({
+        Type: 'Annot',
+        Subtype: 'Text',
+        Rect: dict.Rect,
+        F: 4,
+        IRT: ref,
+        RT: 'R',
+        Name: 'Comment',
+        Open: false,
+        NM: PDFString.of(reply.id),
+        M: PDFString.fromDate(reply.date ? new Date(reply.date) : new Date()),
+        Contents: PDFHexString.fromText(reply.text),
+        C: dict.C,
+        AP: dict.AP,
+        ...(reply.author ? { T: PDFHexString.fromText(reply.author) } : {}),
+      } as never);
+      annotate(page, doc.context.register(answer));
+    }
 }
 
 /** The font text marks are written in: the one given, with the letters used alone, or Helvetica. */

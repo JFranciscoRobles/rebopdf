@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addBookmark, attachFile, detachFile, insertPdf, openPdf, outlineOf, samplePdf, savePdf, setOutline } from '../src';
+import { addBookmark, addMark, attachFile, detachFile, insertPdf, openPdf, outlineOf, samplePdf, savePdf, setOutline } from '../src';
 
 describe('bookmarks and files carried', () => {
   it('writes bookmarks changed, to the pages as they are', async () => {
@@ -42,5 +42,44 @@ describe('bookmarks and files carried', () => {
     expect(fewer.attachments?.map((a) => a.name)).toEqual(['cuentas.csv']);
     // Carrying files, a PDF/A is 3B.
     expect(new TextDecoder('latin1').decode(await savePdf(back, { pdfa: true }))).toMatch(/pdfaid:part[^0-9]*3/);
+  }, 60_000);
+});
+
+describe('replies to notes', () => {
+  it('are written as replies readers show, and read back with their note', async () => {
+    const pdf = await samplePdf('en');
+    const noted = addMark(pdf, {
+      kind: 'note',
+      page: pdf.pages[0].id,
+      at: { x: 400, y: 700 },
+      text: '¿Treinta días?',
+      color: '#f08c00',
+      author: 'Ana',
+      replies: [
+        { id: 'r1', author: 'Luis', text: 'Así lo pide el cliente.', date: '2026-10-30T10:00:00.000Z' },
+        { id: 'r2', author: 'Ana', text: 'De acuerdo.' },
+      ],
+    });
+    const bytes = await savePdf(noted);
+    const { PDFDocument, PDFName } = await import('@cantoo/pdf-lib');
+    const doc = await PDFDocument.load(bytes);
+    const annots = doc
+      .getPage(0)
+      .node.Annots()!
+      .asArray()
+      .map((ref) => doc.context.lookup(ref) as unknown as { get(n: unknown): unknown });
+    expect(annots.filter((a) => a.get(PDFName.of('IRT'))).length).toBe(2);
+    const back = await openPdf(bytes);
+    const note = back.marks.find((m) => m.kind === 'note');
+    expect(note).toMatchObject({ text: '¿Treinta días?', author: 'Ana' });
+    expect((note as { replies?: unknown[] }).replies).toMatchObject([
+      { author: 'Luis', text: 'Así lo pide el cliente.', date: '2026-10-30T10:00:00.000Z' },
+      { author: 'Ana', text: 'De acuerdo.' },
+    ]);
+    expect(back.marks).toHaveLength(1);
+    // Saved again, they stay replies, not notes of their own.
+    const again = await openPdf(await savePdf(back));
+    expect(again.marks).toHaveLength(1);
+    expect((again.marks[0] as { replies?: unknown[] }).replies).toHaveLength(2);
   }, 60_000);
 });

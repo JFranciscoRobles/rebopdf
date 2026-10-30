@@ -59,6 +59,7 @@ export type {
   Point,
   Rect,
   RedactionMark,
+  Reply,
   Signature,
   SignatureMark,
   TextMark,

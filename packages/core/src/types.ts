@@ -93,6 +93,16 @@ export interface NoteMark extends MarkBase {
   at: Point;
   text: string;
   color: Color;
+  /** What was said to it, in its order: written as replies readers show under it. */
+  replies?: Reply[];
+}
+
+/** A reply to a note: who, what, and when (ISO 8601). */
+export interface Reply {
+  id: string;
+  author?: string;
+  text: string;
+  date?: string;
 }
 
 /** Lines drawn by hand. */

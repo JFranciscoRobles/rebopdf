@@ -560,6 +560,12 @@ export class Editor {
   private commit(next: Pdf, group = '', show = true) {
     const before = this.current;
     if (!before || next === before) return;
+    // Who comments changes notes alone; who sees, nothing.
+    if (this.role !== 'edit' && !(this.role === 'comment' && Editor.notesAlone(before, next))) {
+      this.toast(this.role === 'view' ? this.t.viewOnly : this.t.commentOnly);
+      if (show) this.viewer?.setPdf(before);
+      return;
+    }
     const now = Date.now();
     if (!group || group !== this.group || now - this.groupTime > 1500) {
       this.past.push(before);
@@ -629,11 +635,15 @@ export class Editor {
    */
   applyRemote(change: (pdf: Pdf) => Pdf): void {
     if (!this.current) return;
+    const was = this.current.marks.find((m) => m.id === this.chosen);
     this.current = change(this.current);
     this.past = this.past.map(change);
     this.future = this.future.map(change);
     this.viewer?.setPdf(this.current);
-    if (this.chosen && !this.current.marks.some((m) => m.id === this.chosen)) this.choose('');
+    const now = this.current.marks.find((m) => m.id === this.chosen);
+    if (this.chosen && !now) this.choose('');
+    // The menu of a note open as a reply to it comes: shown again, unless its person is writing in it.
+    else if (now && was !== now && now.kind === 'note' && this.pop && !this.pop.contains(this.doc.activeElement)) this.markMenu(now.id, false);
     this.refresh();
     this.options.onChange?.(this.current);
     this.tell(this.current, true);
@@ -666,6 +676,62 @@ export class Editor {
   }
 
   /** Whether pages can be turned, moved, deleted and put in: in a room they cannot, so that they are the same for everyone. */
+  /** What its person may do: everything, notes alone (comment), or nothing but read and move about (view). In a room, as the room says. */
+  setRole(role: 'edit' | 'comment' | 'view'): void {
+    this.role = role;
+    const root = this.viewer?.root;
+    if (root) root.dataset.role = role;
+    for (const { tool } of TOOLS) {
+      const allowed = role === 'edit' || tool === 'select' || (role === 'comment' && tool === 'note');
+      if (this.buttons[tool]) this.buttons[tool].hidden = !allowed;
+    }
+    if (!this.mayUse(this.tool)) void this.setTool('select');
+    this.viewer?.setFillable(role === 'edit');
+    this.viewer?.root.classList.toggle('rp-pages-locked', role !== 'edit' || this.pagesLocked);
+  }
+
+  private role: 'edit' | 'comment' | 'view' = 'edit';
+  private history: { by: string; color: string; at: string; what: (locale: string) => string }[] = [];
+
+  /** Who did what in the room it is in, and when: offered in the menu. */
+  setHistory(entries: { by: string; color: string; at: string; what: (locale: string) => string }[]): void {
+    this.history = entries;
+  }
+
+  /** The history of the room, the last first. */
+  private showHistory(anchor: DOMRect) {
+    const t = this.t;
+    const list = this.doc.createElement('ol');
+    list.className = 'rp-history';
+    list.setAttribute('aria-label', t.history);
+    for (const entry of [...this.history].reverse().slice(0, 200)) {
+      const li = this.doc.createElement('li');
+      const dot = this.doc.createElement('span');
+      dot.className = 'rp-swatch';
+      dot.style.background = entry.color;
+      const who = this.doc.createElement('strong');
+      who.textContent = entry.by;
+      const when = this.doc.createElement('time');
+      when.dateTime = entry.at;
+      when.textContent = new Date(entry.at).toLocaleTimeString(this.options.locale ?? 'en', { hour: '2-digit', minute: '2-digit' });
+      li.append(dot, who, ` ${entry.what(this.options.locale ?? 'en')} `, when);
+      list.append(li);
+    }
+    this.openPop(anchor, [list]);
+  }
+
+  /** Whether one Pdf is another with its notes changed, and nothing else. */
+  private static notesAlone(before: Pdf, after: Pdf): boolean {
+    if (before.pages !== after.pages || JSON.stringify(before.fields.map((f) => f.value)) !== JSON.stringify(after.fields.map((f) => f.value))) return false;
+    const others = (pdf: Pdf) => JSON.stringify(pdf.marks.filter((m) => m.kind !== 'note'));
+    return others(before) === others(after);
+  }
+
+  /** Whether a tool is one its person may use. */
+  private mayUse(tool: Tool): boolean {
+    return this.role === 'edit' || tool === 'select' || (this.role === 'comment' && tool === 'note');
+  }
+
   lockPages(locked: boolean): void {
     this.pagesLocked = locked;
     // A class of the root, not `hidden`: the viewer shows its actions again as it shows the thumbnails.
@@ -701,6 +767,7 @@ export class Editor {
   }
 
   async setTool(tool: Tool): Promise<void> {
+    if (!this.mayUse(tool)) return;
     this.closePop();
     this.choose('');
     if (tool === 'sign') {
@@ -1431,6 +1498,54 @@ export class Editor {
     bar.style.top = `${last.bottom - root.top + 8}px`;
   }
 
+  /** The replies of a note, each with who and when, one to take off, and a box to reply in. */
+  private replies(note: Extract<Mark, { kind: 'note' }>): HTMLElement {
+    const t = this.t;
+    const box = this.doc.createElement('div');
+    box.className = 'rp-replies';
+    const list = this.doc.createElement('ol');
+    list.setAttribute('aria-label', t.replies);
+    for (const reply of note.replies ?? []) {
+      const li = this.doc.createElement('li');
+      const who = this.doc.createElement('strong');
+      who.textContent = reply.author ?? t.someone;
+      const when = this.doc.createElement('time');
+      if (reply.date) {
+        when.dateTime = reply.date;
+        when.textContent = new Date(reply.date).toLocaleString(this.options.locale ?? 'en', { dateStyle: 'short', timeStyle: 'short' });
+      }
+      const said = this.doc.createElement('p');
+      said.textContent = reply.text;
+      const off = this.button(
+        'trash',
+        fill(t.removeReply, { name: reply.author ?? t.someone }),
+        () => {
+          if (!this.current) return;
+          this.commit(updateMark(this.current, note.id, { replies: (note.replies ?? []).filter((r) => r.id !== reply.id) }));
+          this.markMenu(note.id, false);
+        },
+        14,
+      );
+      li.append(who, when, off, said);
+      list.append(li);
+    }
+    const input = this.doc.createElement('input');
+    input.className = 'rp-input';
+    input.placeholder = t.replyHint;
+    input.setAttribute('aria-label', t.reply);
+    input.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' || !input.value.trim() || !this.current) return;
+      event.preventDefault();
+      const reply = { id: `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, author: this.options.author, text: input.value.trim(), date: new Date().toISOString() };
+      this.commit(updateMark(this.current, note.id, { replies: [...(note.replies ?? []), reply] }));
+      this.markMenu(note.id, false);
+      this.viewer?.root.querySelector<HTMLInputElement>('.rp-replies input')?.focus();
+    });
+    if (note.replies?.length) box.append(list);
+    box.append(input);
+    return box;
+  }
+
   /** What can be done to a mark: its colour, what it says, take it off. */
   private markMenu(id: string, focus: boolean) {
     const mark = this.current?.marks.find((m) => m.id === id);
@@ -1461,6 +1576,8 @@ export class Editor {
       });
       items.push(area);
     }
+    // What was said to a note, and a reply to it.
+    if (mark.kind === 'note') items.push(this.replies(mark));
     const swatches = this.doc.createElement('div');
     swatches.className = 'rp-swatches';
     swatches.setAttribute('role', 'group');
@@ -1686,6 +1803,7 @@ export class Editor {
       item('signature', t.signDigitally, t.signDigitallyHint, () => void this.signDigitally()),
       ...(this.options.files !== false ? [item('layers', t.compareWith, t.compareHint, () => void this.compareWith())] : []),
       ...(this.options.recognize ? [item('text', t.recognize, t.recognizeHint, () => void this.recognizeText())] : []),
+      ...(this.history.length ? [item('undo', t.history, fill(t.historyHint, { n: this.history.length }), () => this.showHistory(anchor.getBoundingClientRect()))] : []),
       ...(this.options.menu ?? []).map((own) => item(own.icon, own.label, own.hint ?? '', own.run)),
     ];
     this.openPop(anchor.getBoundingClientRect(), items);

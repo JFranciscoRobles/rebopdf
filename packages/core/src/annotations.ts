@@ -120,14 +120,25 @@ export function takeMarks(doc: PDFDocument, pages: Page[]): { marks: Mark[]; ref
     const value = ref instanceof PDFRef ? context.lookup(ref) : ref;
     return value instanceof PDFDict ? value : undefined;
   };
-  // Annotations in a thread of replies stay as they are: those that reply, and those replied to.
+  // A note and the notes that reply to it are one mark, its replies with it. Other threads stay as they are.
   const replied = new Set<string>();
+  const replies = new Map<string, { ref: PDFObject; dict: PDFDict }[]>();
   for (const page of all) {
     for (const ref of page.node.Annots()?.asArray() ?? []) {
-      const to = dictOf(ref)?.get(name('IRT'));
-      if (to) replied.add(String(to));
+      const dict = dictOf(ref);
+      const to = dict?.get(name('IRT'));
+      if (!dict || !to) continue;
+      replied.add(String(to));
+      replies.set(String(to), [...(replies.get(String(to)) ?? []), { ref, dict }]);
     }
   }
+  const isNote = (dict: PDFDict | undefined) => (dict?.get(name('Subtype')) as PDFName | undefined)?.decodeText() === 'Text';
+  /** Whether a thread is of notes alone, which replace nothing (RT /R): taken as one note with its replies. */
+  const noteThread = (ref: PDFObject, dict: PDFDict) =>
+    isNote(dict) &&
+    !dict.get(name('IRT')) &&
+    (replies.get(String(ref)) ?? []).every((r) => isNote(r.dict) && !replies.has(String(r.ref)) && ((r.dict.get(name('RT')) as PDFName | undefined)?.decodeText() ?? 'R') === 'R');
+  const takenReplies = new Set<string>();
   const marks: Mark[] = [];
   const refs: string[] = [];
   all.forEach((page, i) => {
@@ -137,10 +148,21 @@ export function takeMarks(doc: PDFDocument, pages: Page[]): { marks: Mark[]; ref
     const popups = new Set<string>();
     for (const ref of list.asArray()) {
       const dict = dictOf(ref);
-      const mark = dict && !dict.get(name('IRT')) && !replied.has(String(ref)) ? markOf(doc, dict, pages[i].id) : undefined;
+      if (takenReplies.has(String(ref))) continue;
+      const thread = dict && replied.has(String(ref)) && noteThread(ref, dict);
+      const mark = dict && !dict.get(name('IRT')) && (!replied.has(String(ref)) || thread) ? markOf(doc, dict, pages[i].id) : undefined;
       if (!mark) {
         kept.push(ref);
         continue;
+      }
+      if (thread && mark.kind === 'note') {
+        mark.replies = (replies.get(String(ref)) ?? []).map(({ ref: r, dict: d }) => {
+          takenReplies.add(String(r));
+          if (r instanceof PDFRef) refs.push(String(r));
+          const author = text(doc, d.get(name('T'))) || undefined;
+          const date = dateOf(text(doc, d.get(name('M'))));
+          return { id: uid('r'), text: text(doc, d.get(name('Contents'))), ...(author ? { author } : {}), ...(date ? { date } : {}) };
+        });
       }
       marks.push(mark);
       if (ref instanceof PDFRef) refs.push(String(ref));
@@ -150,7 +172,8 @@ export function takeMarks(doc: PDFDocument, pages: Page[]): { marks: Mark[]; ref
         refs.push(String(popup));
       }
     }
-    if (kept.length !== list.size()) page.node.set(name('Annots'), context.obj(kept.filter((ref) => !popups.has(String(ref)))));
+    const left = kept.filter((ref) => !popups.has(String(ref)) && !takenReplies.has(String(ref)));
+    if (left.length !== list.size()) page.node.set(name('Annots'), context.obj(left));
   });
   return { marks, refs };
 }

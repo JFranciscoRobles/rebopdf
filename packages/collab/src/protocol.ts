@@ -56,10 +56,40 @@ export function applyOps(pdf: Pdf, ops: Op[]): Pdf {
   return next;
 }
 
-/** A person in a room: who, in which colour, and on which page (by number, from 0). */
+/** What one in a room may do: everything, add and change notes alone, or see. */
+export type Role = 'edit' | 'comment' | 'view';
+
+/** A person in a room: who, in which colour, on which page (by number, from 0), and what they may do. */
 export interface Peer {
   client: string;
   name: string;
   color: string;
   page?: number;
+  role?: Role;
+}
+
+/** An operation of a room's history: what was done, by whom, and when. */
+export interface Entry {
+  op: Op;
+  by: string;
+  color: string;
+  /** As ISO 8601. */
+  at: string;
+}
+
+/** What an operation did, in words: "added a note on page 2". */
+export function describeOp(op: Op, locale = 'en'): string {
+  const es = locale.startsWith('es');
+  if (op.kind === 'field') return es ? `rellenó ${op.name}` : `filled ${op.name}`;
+  if (op.kind === 'unmark') return es ? 'quitó una marca' : 'took off a mark';
+  const kinds: Record<string, [string, string]> = {
+    highlight: ['a highlight', 'un resaltado'],
+    note: ['a note', 'una nota'],
+    ink: ['a drawing', 'un dibujo'],
+    text: ['a text', 'un texto'],
+    signature: ['a signature', 'una firma'],
+    redaction: ['something to black out', 'algo por tachar'],
+  };
+  const [en, sp] = kinds[op.mark.kind] ?? ['a mark', 'una marca'];
+  return es ? `puso o cambió ${sp} en la página ${op.page + 1}` : `put or changed ${en} on page ${op.page + 1}`;
 }

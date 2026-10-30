@@ -698,7 +698,7 @@ export class Viewer {
     renderMarks(view.marks, marksOn(this.pdf, view.page.id), view.geo, this.t);
     const signatures = this.pdf.marks.flatMap((m) => (m.kind === 'signature' && m.page === view.page.id ? [m.rect] : []));
     renderFields(view.fields, this.pdf.fields, view.page.id, view.geo, {
-      editable: this.options.fill !== false,
+      editable: this.options.fill !== false && !this.fillLocked,
       onChange: (field, value) => this.fillField(field, value),
       signHere: this.t.signHere,
       onSign: this.options.onSign,
@@ -876,6 +876,15 @@ export class Viewer {
     const y = Math.max(0, this.scroll.scrollTop + 16 - view.el.offsetTop);
     const top = view.geo.toPage({ x: 0, y }).y;
     return { page: view.page.id, top: Math.round(Math.min(view.page.box.y + view.page.box.height, Math.max(view.page.box.y, top))) };
+  }
+
+  private fillLocked = false;
+
+  /** Whether the fields of the form can be filled now: the editor locks them for who may not change the PDF. */
+  setFillable(fillable: boolean): void {
+    if (this.fillLocked === !fillable) return;
+    this.fillLocked = !fillable;
+    this.overlays();
   }
 
   /** Brings a place of the PDF into view: its page, at its height when the PDF says it. */

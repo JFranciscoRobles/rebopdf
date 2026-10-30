@@ -119,6 +119,15 @@ The first version to go to npm: 0.1.0 never went, and what it has is here.
   authorities sign with. In the editor, Sign digitally has a field for the
   authority (`signing.timestamp`) and a box to keep what checks it; in the
   MCP server, `timestamp`, `long_term` and `trusted`.
+- **Rooms for real work**: kept on the disk (`store`, `--store`) and there
+  again when the server starts again; three keys a room, to edit, comment
+  (notes and their replies alone) or see, kept to by the server and by the
+  editor (`setRole`); who did what and when (`session.history`, History of
+  the room in the editor). `joinRoom` takes the `key` of the address;
+  `roomAddress` makes the three.
+- **Replies to notes** (`replies` of a note mark): answered from the note's
+  menu, saved as annotations in reply to it as other readers show them, and
+  read back with their note.
 - **The text of a page, written again** (the Edit text tool, E; a text
   mark's `replaces`; `replace_text` of the MCP server): the old text taken
   out of what the page draws, glyph by glyph, by our own reading of its

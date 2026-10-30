@@ -52,7 +52,7 @@ export function DemoApp() {
     const url = query.get('collab') ?? undefined;
     setServer(url);
     const id = query.get('room');
-    if (url && id) setRoom({ url, room: id, name: query.get('name') ?? undefined });
+    if (url && id) setRoom({ url, room: id, key: query.get('key') ?? undefined, name: query.get('name') ?? undefined });
   }, []);
 
   const choose = (next: Tab) => {
@@ -66,10 +66,11 @@ export function DemoApp() {
     setSharing(true);
     try {
       const query = new URLSearchParams(window.location.search);
-      const id = await live.current.share(server, query.get('name') ?? undefined);
+      const { room: id, keys } = await live.current.share(server, query.get('name') ?? undefined);
       query.set('room', id);
+      query.set('key', keys.edit);
       history.replaceState(null, '', `${window.location.pathname}?${query}`);
-      setRoom({ url: server, room: id, name: query.get('name') ?? undefined });
+      setRoom({ url: server, room: id, key: keys.edit, name: query.get('name') ?? undefined });
       await navigator.clipboard?.writeText(window.location.href).catch(() => {});
     } finally {
       setSharing(false);

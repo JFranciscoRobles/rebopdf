@@ -276,7 +276,7 @@ describe('marks', () => {
     expect((await reopen(pdf, false, false)).marks).toEqual([]);
   });
 
-  it('of other kinds, and those in a thread of replies, stay as they are', async () => {
+  it('of other kinds stay as they are; a note and its replies are one mark', async () => {
     const { PDFDocument, PDFString } = await import('@cantoo/pdf-lib');
     const doc = await PDFDocument.load(await samplePdfBytes('en'));
     const page = doc.getPage(0);
@@ -287,8 +287,9 @@ describe('marks', () => {
     const alone = context.register(context.obj({ Type: 'Annot', Subtype: 'Text', Rect: [300, 300, 320, 320], Contents: PDFString.of('Alone') }));
     for (const ref of [note, reply, square, alone]) page.node.addAnnot(ref);
     const pdf = await openPdf(await doc.save());
-    expect(pdf.marks.map((m) => (m as { text?: string }).text)).toEqual(['Alone']);
-    expect((await annotations(pdf))[0].sort()).toEqual(['Square', 'Text', 'Text']);
+    expect(pdf.marks.map((m) => (m as { text?: string }).text)).toEqual(['Question', 'Alone']);
+    expect((pdf.marks[0] as { replies?: { text: string }[] }).replies?.map((r) => r.text)).toEqual(['Answer']);
+    expect((await annotations(pdf))[0].sort()).toEqual(['Square']);
   });
 
   it('are changed and taken off, and leave with their page', async () => {
