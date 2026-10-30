@@ -119,7 +119,21 @@ export interface SignatureMark extends MarkBase {
   color: Color;
 }
 
-export type Mark = HighlightMark | NoteMark | InkMark | TextMark | SignatureMark;
+/**
+ * What is to be blacked out, for good: when the PDF is saved, what is under
+ * these boxes (text, pictures, drawings, what fields hold) is taken out of
+ * the file, not only covered. The page is saved as a picture with the boxes
+ * burnt in, and the text out of them is put back over it, unseen, to be
+ * found and selected.
+ */
+export interface RedactionMark extends MarkBase {
+  kind: 'redaction';
+  rects: Rect[];
+  /** The text under it, as it was when it was marked, for the person to see what goes. */
+  text?: string;
+}
+
+export type Mark = HighlightMark | NoteMark | InkMark | TextMark | SignatureMark | RedactionMark;
 export type MarkKind = Mark['kind'];
 
 /** A mark of any kind but its id, which is given one when it is put on. */
@@ -138,12 +152,32 @@ export interface Pdf {
   marks: Mark[];
   /** What the first file says of itself. */
   info: { title?: string; author?: string; subject?: string };
+  /**
+   * The bytes PDF.js draws a file from, when they are not those it is saved
+   * from: without the annotations taken as marks, which the viewer draws.
+   */
+  drawn?: Record<string, Uint8Array>;
+  /** The annotations of each file taken as marks (and their popups), by reference, to be taken out when it is saved. */
+  taken?: Record<string, string[]>;
+  /** The digital signatures of the files, as they say who signed and when. */
+  signatures?: Signature[];
+}
+
+/** A digital signature a file carries. */
+export interface Signature {
+  source: string;
+  /** The name of its field. */
+  field: string;
+  /** Who signed, when the signature says. */
+  name?: string;
+  date?: string;
+  reason?: string;
 }
 
 /** What could not be done to a PDF, said so a person can understand it. */
 export class PdfError extends Error {
   constructor(
-    readonly code: 'encrypted' | 'invalid' | 'empty' | 'not-found',
+    readonly code: 'encrypted' | 'invalid' | 'empty' | 'not-found' | 'incremental',
     message: string,
   ) {
     super(message);

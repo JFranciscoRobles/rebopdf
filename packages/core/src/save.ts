@@ -8,6 +8,11 @@
 // changed after.
 
 import {
+  PDFCheckBox,
+  PDFDropdown,
+  PDFOptionList,
+  PDFRadioGroup,
+  PDFTextField,
   LineCapStyle,
   LineJoinStyle,
   type PDFDocument,
@@ -38,9 +43,12 @@ import {
   stroke,
   degrees,
 } from '@cantoo/pdf-lib';
-import { dropUnreachable, writeDocument } from './objects';
+import { dropAnnotations } from './annotations';
+import { overlaps } from './geometry';
+import { dropUnreachable, OBJECTS_AT_ONCE, writeDocument } from './objects';
 import { formOf, loadDocument } from './open';
-import type { Color, Field, HighlightMark, InkMark, Mark, NoteMark, Pdf, Point, Rect, SignatureMark, TextMark } from './types';
+import { Redactor } from './redact';
+import { type Color, type Field, type HighlightMark, type InkMark, type Mark, type NoteMark, type Pdf, PdfError, type Point, type Rect, type SignatureMark, type TextMark } from './types';
 
 export interface SaveOptions {
   /** Draws fields and marks into the pages, so that they cannot be changed after. */
@@ -53,6 +61,32 @@ export interface SaveOptions {
    * Arabic and the scripts of India are not written as they should be.
    */
   font?: Uint8Array;
+  /**
+   * Whether the changes are added after the file as it came, leaving its
+   * bytes as they were, as signing needs: a digital signature it carries
+   * still holds, and the changes since show apart. 'auto' (when left out)
+   * does so for a signed PDF; true does so always, and says why it cannot
+   * when it cannot: for pages of more than one PDF, and for anything blacked
+   * out, which must be taken out of the file, not added after it.
+   */
+  incremental?: boolean | 'auto';
+}
+
+/** Why a Pdf cannot be saved by adding to its file: undefined when it can. */
+export function whyNotIncremental(pdf: Pdf): string | undefined {
+  if (new Set(pdf.pages.map((page) => page.source)).size > 1) return 'Its pages come from more than one PDF.';
+  if (pdf.marks.some((mark) => mark.kind === 'redaction')) return 'Something is blacked out in it, which is taken out of the file, not added after it.';
+  return undefined;
+}
+
+/** Whether a Pdf is saved by adding to its file: as asked, or, by default, when it is signed. */
+export function savesIncrementally(pdf: Pdf, asked: SaveOptions['incremental'] = 'auto'): boolean {
+  const why = whyNotIncremental(pdf);
+  if (asked === true && why) throw new PdfError('incremental', `It cannot be saved by adding to the file as it came: ${why}`);
+  if (asked === false || why) return false;
+  if (asked === true) return true;
+  const base = pdf.pages[0]?.source;
+  return !!pdf.signatures?.some((signature) => signature.source === base);
 }
 
 /** The size of the icon of a note, in points. */
@@ -62,14 +96,22 @@ export const NOTE_SIZE = 20;
 export async function savePdf(pdf: Pdf, options: SaveOptions = {}): Promise<Uint8Array> {
   const used = [...new Set(pdf.pages.map((page) => page.source))];
   const base = used[0];
+  const incremental = savesIncrementally(pdf, options.incremental);
   const docs = new Map<string, PDFDocument>();
-  for (const source of used) docs.set(source, await loadDocument(pdf.sources[source]));
+  for (const source of used) docs.set(source, await loadDocument(pdf.sources[source], undefined, incremental));
   const doc = docs.get(base)!;
+  // The annotations taken as marks go: the marks are written as they are now.
+  for (const [source, each] of docs) dropAnnotations(each, pdf.taken?.[source] ?? []);
+
+  // What is blacked out, by page; the fields on those pages are drawn into them, and go from the form.
+  const boxes = new Map<string, Rect[]>();
+  for (const mark of pdf.marks) if (mark.kind === 'redaction') boxes.set(mark.page, [...(boxes.get(mark.page) ?? []), ...mark.rects]);
+  const kept = (field: Field) => !field.widgets.some((widget) => boxes.has(widget.page));
 
   for (const [source, each] of docs)
     fillForm(
       each,
-      pdf.fields.filter((field) => field.source === source),
+      pdf.fields.filter((field) => field.source === source && kept(field)),
       source === base && !options.flatten,
     );
 
@@ -86,21 +128,42 @@ export async function savePdf(pdf: Pdf, options: SaveOptions = {}): Promise<Uint
   }
   const own = doc.getPages();
   const order = pdf.pages.map((page) => (page.source === base ? own[page.index] : copied.get(page.id)!));
-  const kept = new Set(order.map((page) => page.ref.toString()));
-  const gone = new Set(own.filter((page) => !kept.has(page.ref.toString())).map((page) => page.ref.toString()));
-  setPages(doc, order);
+  const stay = new Set(order.map((page) => page.ref.toString()));
+  const gone = new Set(own.filter((page) => !stay.has(page.ref.toString())).map((page) => page.ref.toString()));
+  // The page tree is written again only when the pages are not those of the file, in its order.
+  if (order.length !== own.length || order.some((page, i) => page !== own[i])) setPages(doc, order);
 
   let font: PDFFont | undefined;
   const helvetica = async () => (font ??= await textFont(doc, options.font));
-  for (const [i, page] of pdf.pages.entries()) {
-    const out = order[i];
-    out.setRotation(degrees(page.rotation));
-    for (const mark of pdf.marks) if (mark.page === page.id) await putMark(doc, out, mark, !!options.flatten, helvetica);
+  const redactor = new Redactor(doc);
+  try {
+    for (const [i, page] of pdf.pages.entries()) {
+      const out = order[i];
+      if (out.getRotation().angle !== page.rotation) out.setRotation(degrees(page.rotation));
+      const blacked = boxes.get(page.id);
+      if (blacked) {
+        const fields = pdf.fields.filter((field) => field.source === page.source);
+        await redactor.redact(out, page, pdf.drawn?.[page.source] ?? pdf.sources[page.source], blacked, fields, helvetica);
+      }
+      for (const mark of pdf.marks) {
+        if (mark.page !== page.id || mark.kind === 'redaction') continue;
+        // What would lie over what is blacked out goes with it.
+        if (blacked?.some((box) => overlaps(markBounds(mark), box))) continue;
+        await putMark(doc, out, mark, !!options.flatten, helvetica);
+      }
+    }
+  } finally {
+    await redactor.close();
+  }
+  if (boxes.size) {
+    // The tagged structure of a PDF keeps its text apart from its pages: it goes.
+    for (const key of ['StructTreeRoot', 'MarkInfo']) doc.catalog.delete(PDFName.of(key));
   }
 
   doc.setProducer('ReboPDF');
   doc.setModificationDate(new Date());
-  if (pdf.info.title) doc.setTitle(pdf.info.title);
+  if (pdf.info.title && doc.getTitle() !== pdf.info.title) doc.setTitle(pdf.info.title);
+  if (incremental) return doc.save({ objectsPerTick: OBJECTS_AT_ONCE });
   dropUnreachable(doc, gone);
   return writeDocument(doc);
 }
@@ -124,6 +187,9 @@ function setPages(doc: PDFDocument, order: PDFPage[]) {
   for (const page of order) page.node.setParent(rootRef);
 }
 
+/** The kinds of fields the engine keeps, and fills. */
+const FILLED = [PDFTextField, PDFCheckBox, PDFRadioGroup, PDFDropdown, PDFOptionList];
+
 /** Writes what the fields hold; those no longer in the Pdf (their pages taken out) are taken out of the form. */
 function fillForm(doc: PDFDocument, fields: Field[], keep: boolean) {
   const form = formOf(doc);
@@ -132,7 +198,8 @@ function fillForm(doc: PDFDocument, fields: Field[], keep: boolean) {
   for (const field of form.getFields()) {
     const ours = byName.get(field.getName());
     if (!ours) {
-      if (keep) {
+      // Only a field of a kind the engine keeps is taken out: a signature, or a button, is no field of it, and stays.
+      if (keep && FILLED.some((kind) => field instanceof kind)) {
         try {
           form.removeField(field);
         } catch {
@@ -191,6 +258,13 @@ export function markBounds(mark: Mark): Rect {
       return { x: mark.at.x, y: mark.at.y - NOTE_SIZE, width: NOTE_SIZE, height: NOTE_SIZE };
     case 'ink':
       return boundsOf(mark.paths.flat(), mark.width);
+    case 'redaction':
+      return boundsOf(
+        mark.rects.flatMap((r) => [
+          { x: r.x, y: r.y },
+          { x: r.x + r.width, y: r.y + r.height },
+        ]),
+      );
     default:
       return mark.rect;
   }
@@ -257,6 +331,7 @@ function drawing(mark: HighlightMark | NoteMark | InkMark, multiply: string | PD
 }
 
 async function putMark(doc: PDFDocument, page: PDFPage, mark: Mark, flatten: boolean, helvetica: () => Promise<PDFFont>) {
+  if (mark.kind === 'redaction') return;
   if (mark.kind === 'text') return drawText(page, mark, await helvetica());
   if (mark.kind === 'signature') return drawSignature(doc, page, mark);
   const blend = doc.context.obj({ Type: 'ExtGState', BM: 'Multiply', CA: 1, ca: 1 });

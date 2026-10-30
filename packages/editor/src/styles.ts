@@ -4,7 +4,9 @@
 
 const CSS = `
 .rp-root[data-tool="note"] .rp-page, .rp-root[data-tool="text"] .rp-page, .rp-root[data-tool="sign"] .rp-page { cursor: crosshair; }
-.rp-root[data-tool="ink"] .rp-page { cursor: crosshair; touch-action: none; }
+.rp-root[data-tool="ink"] .rp-page, .rp-root[data-tool="redact"] .rp-page { cursor: crosshair; touch-action: none; }
+.rp-boxing { position: absolute; z-index: 3; background: rgba(0, 0, 0, 0.75); outline: 2px dashed #e03131; pointer-events: none; }
+.rp-pop-info { max-width: 280px; margin: 0; color: var(--rp-muted); font-size: 12.5px; line-height: 1.45; }
 .rp-root:not([data-tool="select"]):not([data-tool="highlight"]) .textLayer { pointer-events: none; }
 .rp-root:not([data-tool="select"]) .rp-fields { display: none; }
 .rp-root:not([data-tool="select"]):not([data-tool="highlight"]) .rp-links { display: none; }

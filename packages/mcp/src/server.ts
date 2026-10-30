@@ -5,7 +5,7 @@
 
 import { readFile, writeFile } from 'node:fs/promises';
 import { basename, extname, isAbsolute, relative, resolve } from 'node:path';
-import { extractPages, insertPdf, openPdf, type Pdf, PdfError, savePdf } from '@rebopdf/core';
+import { extractPages, insertPdf, openPdf, type Pdf, PdfError, savePdf, savesIncrementally, whyNotIncremental } from '@rebopdf/core';
 import { version } from '../package.json';
 import { type Files, findTool, pagesOf, type Tool, TOOLS, ToolError } from './tools';
 
@@ -36,7 +36,7 @@ interface Open {
 const HISTORY = 30;
 const PROTOCOLS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 
-const INSTRUCTIONS = `Tools to read and change PDF files. Open one with open_pdf, read it with read_pdf, find text with search_pdf. Fill its form with list_fields and fill_fields; highlight text, add notes, write on it and sign it; turn, delete, move, join and take out pages. Pages go by number from 1 ("1,3-5"); places by points from the top left of a page, or by a text of the page with "near". Changes stay in memory until save_pdf, which writes a copy unless it is told the file to write. To sign, use only a picture of a signature the person gives, when that person asks.`;
+const INSTRUCTIONS = `Tools to read and change PDF files. To take private text out of a PDF, black it out with redact_text or redact_area: when saved, it is gone from the file, not only covered. Open one with open_pdf, read it with read_pdf, find text with search_pdf. Fill its form with list_fields and fill_fields; highlight text, add notes, write on it and sign it; turn, delete, move, join and take out pages. Pages go by number from 1 ("1,3-5"); places by points from the top left of a page, or by a text of the page with "near". Changes stay in memory until save_pdf, which writes a copy unless it is told the file to write. To sign, use only a picture of a signature the person gives, when that person asks.`;
 
 const DOCUMENT = { type: 'string', description: 'The path of a PDF opened with open_pdf. Left out, the last one opened.' };
 
@@ -180,15 +180,27 @@ export function createPdfServer(options: ServerOptions = {}) {
         open.set(full, { file: full, pdf, unsaved: false, history: [] });
         last = full;
         const info = [pdf.info.title && `title "${pdf.info.title}"`, pdf.info.author && `by ${pdf.info.author}`].filter(Boolean).join(', ');
-        return `Opened ${full}: ${pdf.pages.length} pages, ${pdf.fields.length} form fields${info ? `, ${info}` : ''}. Read it with read_pdf.`;
+        const marks = pdf.marks.length ? ` It comes with ${pdf.marks.length} highlights, notes or drawings (list_marks).` : '';
+        const signed = pdf.signatures?.length
+          ? ` It is digitally signed${pdf.signatures.map((s) => (s.name ? ` by ${s.name}` : '')).join(',')}: what is changed is added after the signature, which still holds, unless pages of another PDF are put in or something is blacked out.`
+          : '';
+        return `Opened ${full}: ${pdf.pages.length} pages, ${pdf.fields.length} form fields${info ? `, ${info}` : ''}.${marks}${signed} Read it with read_pdf.`;
       }
       case 'save_pdf': {
         const doc = document(args.document);
         const target = args.file ? allowed(String(args.file)) : doc.file.replace(/(\.pdf)?$/i, (ext) => ` (edited)${ext || '.pdf'}`);
+        const incremental = savesIncrementally(doc.pdf);
         const bytes = await savePdf(doc.pdf, { flatten: !!args.flatten, font: await fontBytes() });
         await writeFile(target, bytes);
         if (target === doc.file) doc.unsaved = false;
-        return `Wrote ${target} (${Math.round(bytes.length / 1024)} KB, ${doc.pdf.pages.length} pages${args.flatten ? ', flattened' : ''}).`;
+        const blacked = doc.pdf.marks.filter((m) => m.kind === 'redaction').length;
+        const notes = [
+          blacked && `${blacked} ${blacked === 1 ? 'part' : 'parts'} blacked out for good: what was under them is not in the file`,
+          doc.pdf.signatures?.length && (incremental ? 'added after its digital signature, which still holds' : `its digital signature no longer holds: ${whyNotIncremental(doc.pdf)}`),
+        ].filter(Boolean);
+        // The PDF open is the one saved: what is blacked out is gone from it too.
+        if (blacked && target === doc.file) doc.pdf = await openPdf(bytes, { name: basename(target) });
+        return `Wrote ${target} (${Math.round(bytes.length / 1024)} KB, ${doc.pdf.pages.length} pages${args.flatten ? ', flattened' : ''}).${notes.length ? ` ${notes.join('; ')}.` : ''}`;
       }
       case 'merge_pdfs': {
         const doc = document(args.document);

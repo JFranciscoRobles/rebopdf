@@ -1,6 +1,6 @@
 {
   "name": "@rebopdf/mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Tools for an AI assistant to read, search, fill, annotate, sign and put in order PDF files: an MCP server for Claude Desktop, Claude Code and other clients.",
   "license": "MIT",
   "private": true,

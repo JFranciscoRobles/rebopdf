@@ -1,10 +1,24 @@
 // A PDF opened: its pages, what it says of itself and its form fields, read
 // with pdf-lib. The bytes are kept as they came, to be drawn and saved from.
 
-import { PDFCheckBox, PDFDocument, type PDFField, PDFDropdown, PDFHexString, PDFName, PDFOptionList, PDFRadioGroup, type PDFRef, PDFString, PDFTextField } from '@cantoo/pdf-lib';
-import { takeMarks } from './annotations';
+import {
+  PDFCheckBox,
+  PDFDocument,
+  type PDFField,
+  PDFDropdown,
+  PDFHexString,
+  PDFName,
+  PDFOptionList,
+  PDFRadioGroup,
+  type PDFRef,
+  PDFSignature,
+  PDFString,
+  PDFTextField,
+  PDFDict,
+} from '@cantoo/pdf-lib';
+import { dateOf, takeMarks } from './annotations';
 import { dropUnreachable, OBJECTS_AT_ONCE, writeDocument } from './objects';
-import { type Field, type Page, type Pdf, PdfError, type Rect } from './types';
+import { type Field, type Page, type Pdf, PdfError, type Rect, type Signature } from './types';
 
 let counter = 0;
 /** An id not used before in this run. */
@@ -27,10 +41,10 @@ export interface OpenOptions {
 const unlockedDocs = new WeakSet<PDFDocument>();
 
 /** Loads a file with pdf-lib, saying in words what keeps it from being opened. */
-export async function loadDocument(bytes: Uint8Array, password?: string): Promise<PDFDocument> {
+export async function loadDocument(bytes: Uint8Array, password?: string, incremental = false): Promise<PDFDocument> {
   if (!bytes.length) throw new PdfError('empty', 'The file is empty.');
   // Read in batches big enough not to be slow (pdf-lib waits between every hundred objects), small enough for a page to keep answering.
-  const load = (pass?: string) => PDFDocument.load(bytes, { password: pass, updateMetadata: false, parseSpeed: OBJECTS_AT_ONCE });
+  const load = (pass?: string) => PDFDocument.load(bytes, { password: pass, updateMetadata: false, parseSpeed: OBJECTS_AT_ONCE, forIncrementalUpdate: incremental });
   const locked = (error: unknown) => /encrypt|password/i.test(error instanceof Error ? `${error.name} ${error.message}` : String(error));
   try {
     const doc = await load(password);
@@ -91,13 +105,42 @@ export async function openPdf(bytes: Uint8Array, options: OpenOptions = {}): Pro
     doc = await loadDocument(bytes);
   }
   const { pages, fields, info } = await readSource(source, bytes, undefined, doc);
-  // The highlights, notes and ink it came with, as marks: taken out of its bytes, so that they are drawn once.
-  const marks = options.marks === false ? [] : takeMarks(doc, pages);
-  if (marks.length) {
-    dropUnreachable(doc);
-    bytes = await writeDocument(doc);
+  const signatures = signaturesOf(doc, source);
+  const pdf: Pdf = {
+    name: options.name ?? (info.title ? `${info.title}.pdf` : 'document.pdf'),
+    sources: { [source]: bytes },
+    pages,
+    fields,
+    marks: [],
+    info,
+    ...(signatures.length ? { signatures } : {}),
+  };
+  if (options.marks === false) return pdf;
+  // The highlights, notes and ink it came with, as marks. Its bytes stay as they came (a signature holds on them);
+  // PDF.js draws it from bytes without them, which the viewer draws.
+  const { marks, refs } = takeMarks(doc, pages);
+  if (!marks.length) return pdf;
+  dropUnreachable(doc);
+  return { ...pdf, marks, drawn: { [source]: await writeDocument(doc) }, taken: { [source]: refs } };
+}
+
+/** The digital signatures of a document: who signed, and when, as each says. */
+function signaturesOf(doc: PDFDocument, source: string): Signature[] {
+  const out: Signature[] = [];
+  for (const field of formOf(doc)?.getFields() ?? []) {
+    if (!(field instanceof PDFSignature)) continue;
+    const value = field.acroField.dict.lookup(PDFName.of('V'));
+    if (!(value instanceof PDFDict)) continue;
+    const read = (key: string) => {
+      const v = value.lookup(PDFName.of(key));
+      return v instanceof PDFString || v instanceof PDFHexString ? v.decodeText().trim() : '';
+    };
+    const name = read('Name');
+    const reason = read('Reason');
+    const date = dateOf(read('M'));
+    out.push({ source, field: field.getName(), ...(name ? { name } : {}), ...(date ? { date } : {}), ...(reason ? { reason } : {}) });
   }
-  return { name: options.name ?? (info.title ? `${info.title}.pdf` : 'document.pdf'), sources: { [source]: bytes }, pages, fields, marks, info };
+  return out;
 }
 
 /** What a file gives a Pdf: its pages and fields, with ids of the source it is given. */

@@ -137,7 +137,9 @@ const describeMark = (pdf: Pdf, mark: Mark) => {
           ? `text: ${mark.text}`
           : mark.kind === 'ink'
             ? `drawing of ${mark.paths.length} lines`
-            : 'signature';
+            : mark.kind === 'redaction'
+              ? `blacked out when saved${mark.text ? `: "${mark.text}"` : ''}`
+              : 'signature';
   return `- ${mark.id} (page ${numberOf(pdf, mark.page)}${mark.author ? `, by ${mark.author}` : ''}): ${what}`;
 };
 
@@ -342,6 +344,44 @@ export const TOOLS: Tool[] = [
       }
       const next = addMark(pdf, { kind: 'signature', page: page.id, rect, image: picture.dataUrl, color: '#000000' });
       return { text: `Signed on page ${numberOf(pdf, page.id)}: ${next.marks.at(-1)!.id}.`, pdf: next };
+    },
+  },
+  {
+    name: 'redact_text',
+    title: 'Black out text',
+    writes: true,
+    description:
+      'Blacks out text for good where it is in the PDF: names, numbers, anything private. When the PDF is saved, what is under the boxes is taken out of the file (the pages with them are saved as pictures with the boxes burnt in, their other text kept unseen to be found), not only covered. Every place it is, or the one `occurrence` says. Read the PDF after to see that it is gone.',
+    properties: { text: { type: 'string', description: 'The text, as it reads in the PDF.' }, occurrence: OCCURRENCE, page: { ...PAGE, description: 'Only on this page.' } },
+    required: ['text'],
+    async run(pdf, args) {
+      const page = args.page === undefined ? undefined : pageAt(pdf, args.page);
+      let matches = (await searchPdf(pdf, String(args.text ?? ''))).filter((m) => !page || m.page === page.id);
+      if (!matches.length) fail(`"${args.text}" is not in ${page ? `page ${args.page}` : 'the PDF'}, or it is blacked out already.`);
+      if (args.occurrence !== undefined) matches = [await findNear(pdf, args.text, args.occurrence, page)];
+      let next = pdf;
+      for (const m of matches)
+        next = addMark(next, { kind: 'redaction', page: m.page, rects: m.rects.map((r) => ({ x: r.x - 0.5, y: r.y - 0.5, width: r.width + 1, height: r.height + 1 })), text: m.text });
+      return {
+        text: `Blacked out ${matches.length} ${matches.length === 1 ? 'place' : 'places'} (${matches.map((m) => `page ${numberOf(pdf, m.page)}`).join(', ')}), for good when the PDF is saved.`,
+        pdf: next,
+      };
+    },
+  },
+  {
+    name: 'redact_area',
+    title: 'Black out a part of a page',
+    writes: true,
+    description: 'Blacks out a box of a page for good, as redact_text does text: a picture, a signature, a part with no text to find. In points from the top left of the page.',
+    properties: { page: PAGE, x: X, y: Y, width: { type: 'number', description: 'How wide, in points.' }, height: { type: 'number', description: 'How tall, in points.' } },
+    required: ['page', 'x', 'y', 'width', 'height'],
+    async run(pdf, args) {
+      const page = pageAt(pdf, args.page);
+      const [width, height] = [Number(args.width), Number(args.height)];
+      if (!(width > 0 && height > 0)) fail('Give it a width and a height greater than 0.');
+      const top = fromTop(page, Number(args.x), Number(args.y));
+      const next = addMark(pdf, { kind: 'redaction', page: page.id, rects: [{ x: top.x, y: top.y - height, width, height }] });
+      return { text: `Blacked out a box of page ${numberOf(pdf, page.id)}, for good when the PDF is saved.`, pdf: next };
     },
   },
   {

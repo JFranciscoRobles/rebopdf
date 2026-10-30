@@ -31,6 +31,7 @@ const en = {
   failed: 'This page could not be drawn.',
   note: 'Note',
   signature: 'Signature',
+  redaction: 'To be blacked out',
 };
 
 export type Strings = typeof en;
@@ -66,6 +67,7 @@ const es: Strings = {
   failed: 'Esta página no se pudo dibujar.',
   note: 'Nota',
   signature: 'Firma',
+  redaction: 'Por tachar',
 };
 
 export const STRINGS = { en, es };

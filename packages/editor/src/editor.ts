@@ -26,6 +26,8 @@ import {
   rotatePages,
   type SaveOptions,
   savePdf,
+  savesIncrementally,
+  whyNotIncremental,
   updateMark,
 } from '@rebopdf/core';
 import { fill, type Geometry, type IconName, icon, makeOption, mountViewer, pathData, type Viewer, type Zoom } from '@rebopdf/viewer';
@@ -33,7 +35,7 @@ import { type EditorStrings, editorStringsFor } from './i18n';
 import { askSignature, type Signature } from './signature';
 import { injectEditorStyles } from './styles';
 
-export type Tool = 'select' | 'highlight' | 'note' | 'ink' | 'text' | 'sign';
+export type Tool = 'select' | 'highlight' | 'note' | 'ink' | 'text' | 'sign' | 'redact';
 
 export interface EditorOptions {
   /** The PDF to work on; without one, the editor asks for a file. */
@@ -75,6 +77,7 @@ const TOOLS: { tool: Tool; icon: IconName; key: string }[] = [
   { tool: 'ink', icon: 'pen', key: 'd' },
   { tool: 'text', icon: 'text', key: 't' },
   { tool: 'sign', icon: 'signature', key: 's' },
+  { tool: 'redact', icon: 'redact', key: 'r' },
 ];
 
 const HISTORY = 100;
@@ -92,7 +95,7 @@ export class Editor {
   private group = '';
   private groupTime = 0;
   private tool: Tool = 'select';
-  private colors: Record<Tool, ColorName> = { select: 'yellow', highlight: 'yellow', note: 'yellow', ink: 'blue', text: 'black', sign: 'black' };
+  private colors: Record<Tool, ColorName> = { select: 'yellow', highlight: 'yellow', note: 'yellow', ink: 'blue', text: 'black', sign: 'black', redact: 'black' };
   private chosen = '';
   private chosenPages = new Set<string>();
   private lastPage = '';
@@ -137,6 +140,7 @@ export class Editor {
       this.current = pdf;
       this.viewer.setPdf(pdf);
       this.refresh();
+      this.tellSigned(pdf);
     } else this.start(pdf);
   }
 
@@ -175,7 +179,7 @@ export class Editor {
     tools.setAttribute('role', 'group');
     tools.setAttribute('aria-label', t.tools);
     for (const { tool, icon: name, key } of TOOLS) {
-      const label = { select: t.select, highlight: t.highlight, note: t.note, ink: t.draw, text: t.text, sign: t.sign }[tool];
+      const label = { select: t.select, highlight: t.highlight, note: t.note, ink: t.draw, text: t.text, sign: t.sign, redact: t.redact }[tool];
       const b = this.button(name, `${label} (${key.toUpperCase()})`, () => void this.setTool(tool));
       b.setAttribute('aria-label', label);
       b.setAttribute('aria-pressed', String(tool === this.tool));
@@ -229,7 +233,8 @@ export class Editor {
     this.selbar.className = 'rp-selbar';
     this.selbar.hidden = true;
     const mark = this.button('highlight', t.highlightSelection, () => this.highlightSelection());
-    this.selbar.append(mark);
+    const black = this.button('redact', t.redactSelection, () => this.highlightSelection('redaction'));
+    this.selbar.append(mark, black);
     const zone = this.doc.createElement('div');
     zone.className = 'rp-dropzone';
     zone.textContent = t.dropHere;
@@ -250,6 +255,13 @@ export class Editor {
     });
     if (this.options.files !== false) this.dropping(root, zone);
     this.refresh();
+    this.tellSigned(pdf);
+  }
+
+  /** Says a PDF is signed, by whom, and that what is changed is added after the signature. */
+  private tellSigned(pdf: Pdf) {
+    const [first] = pdf.signatures ?? [];
+    if (first) this.toast(fill(this.t.signedBy, { name: first.name ?? this.t.someone }));
   }
 
   private listen(target: EventTarget, type: string, handler: (event: Event) => void) {
@@ -325,7 +337,7 @@ export class Editor {
       const label = fill(this.t.colorNamed, { name: this.t.colors[name] });
       color.title = label;
       color.setAttribute('aria-label', label);
-      color.hidden = this.tool === 'select' || this.tool === 'sign';
+      color.hidden = this.tool === 'select' || this.tool === 'sign' || this.tool === 'redact';
     }
     this.showChosen();
     for (const li of this.viewer?.root.querySelectorAll<HTMLElement>('.rp-thumb') ?? []) li.setAttribute('aria-selected', String(this.chosenPages.has(li.dataset.page!)));
@@ -399,8 +411,50 @@ export class Editor {
       case 'sign':
         this.placeSignature(at.id, at.point, at.geo);
         return;
+      case 'redact':
+        this.drawBox(event as PointerEvent, at);
+        return;
       default:
     }
+  }
+
+  /** Draws a box with the pointer, to be blacked out. */
+  private drawBox(event: PointerEvent, at: NonNullable<ReturnType<Editor['at']>>) {
+    const box = this.doc.createElement('div');
+    box.className = 'rp-boxing';
+    at.el.append(box);
+    let end = at.screen;
+    const place = () => {
+      Object.assign(box.style, {
+        left: `${Math.min(at.screen.x, end.x)}px`,
+        top: `${Math.min(at.screen.y, end.y)}px`,
+        width: `${Math.abs(end.x - at.screen.x)}px`,
+        height: `${Math.abs(end.y - at.screen.y)}px`,
+      });
+    };
+    place();
+    at.el.setPointerCapture(event.pointerId);
+    const move = (e: PointerEvent) => {
+      const r = at.el.getBoundingClientRect();
+      end = { x: Math.max(0, Math.min(r.width, e.clientX - r.left)), y: Math.max(0, Math.min(r.height, e.clientY - r.top)) };
+      place();
+    };
+    const up = () => {
+      at.el.removeEventListener('pointermove', move);
+      at.el.removeEventListener('pointerup', up);
+      at.el.removeEventListener('pointercancel', up);
+      box.remove();
+      if (!this.current) return;
+      const a = at.geo.toPage(at.screen);
+      const b = at.geo.toPage(end);
+      const rect = { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(a.x - b.x), height: Math.abs(a.y - b.y) };
+      if (rect.width < 3 || rect.height < 3) return;
+      this.commit(addMark(this.current, { kind: 'redaction', page: at.id, rects: [rect], author: this.options.author }));
+      this.say(this.t.redactInfo);
+    };
+    at.el.addEventListener('pointermove', move);
+    at.el.addEventListener('pointerup', up);
+    at.el.addEventListener('pointercancel', up);
   }
 
   /** Puts a note, a text or the signature in the middle of the page in view, for those who do not point. */
@@ -462,7 +516,7 @@ export class Editor {
   }
 
   private kindName(mark: Mark) {
-    return { highlight: this.t.highlight, note: this.t.note, ink: this.t.draw, text: this.t.text, signature: this.t.sign }[mark.kind];
+    return { highlight: this.t.highlight, note: this.t.note, ink: this.t.draw, text: this.t.text, signature: this.t.sign, redaction: this.t.redact }[mark.kind];
   }
 
   private showChosen() {
@@ -655,7 +709,7 @@ export class Editor {
   }
 
   /** Highlights the text selected in the pages, a mark for each page it is on. */
-  highlightSelection(): void {
+  highlightSelection(kind: 'highlight' | 'redaction' = 'highlight'): void {
     const selection = this.doc.getSelection();
     if (!selection || selection.isCollapsed || !this.current || !this.viewer) return;
     const range = selection.getRangeAt(0);
@@ -679,7 +733,11 @@ export class Editor {
     const text = selection.toString().replace(/\s+/g, ' ').trim();
     const color = COLORS.find((c) => c.name === this.colors.highlight)!.light;
     let next = this.current;
-    for (const [page, rects] of byPage) next = addMark(next, { kind: 'highlight', page, rects: mergeLines(rects), color, text, author: this.options.author });
+    for (const [page, rects] of byPage)
+      next = addMark(
+        next,
+        kind === 'redaction' ? { kind, page, rects: mergeLines(rects), text, author: this.options.author } : { kind, page, rects: mergeLines(rects), color, text, author: this.options.author },
+      );
     selection.removeAllRanges();
     this.selbar!.hidden = true;
     this.commit(next);
@@ -736,7 +794,7 @@ export class Editor {
     swatches.className = 'rp-swatches';
     swatches.setAttribute('role', 'group');
     swatches.setAttribute('aria-label', t.color);
-    if (mark.kind !== 'signature') {
+    if (mark.kind !== 'signature' && mark.kind !== 'redaction') {
       for (const c of COLORS) {
         const value = mark.kind === 'highlight' ? c.light : c.ink;
         const b = this.doc.createElement('button');
@@ -763,7 +821,7 @@ export class Editor {
     remove.append(icon(this.doc, 'trash', 16), t.remove);
     remove.addEventListener('click', () => this.removeChosen());
     const actions: HTMLElement[] = [];
-    if (mark.kind !== 'highlight') {
+    if (mark.kind !== 'highlight' && mark.kind !== 'redaction') {
       const twin = this.doc.createElement('button');
       twin.type = 'button';
       twin.className = 'rp-button';
@@ -780,7 +838,13 @@ export class Editor {
       actions.push(every);
     }
     if (actions.length) items.push(this.row([], actions));
-    items.push(this.row(mark.kind === 'signature' ? [] : [swatches], [remove]));
+    if (mark.kind === 'redaction') {
+      const info = this.doc.createElement('p');
+      info.className = 'rp-pop-info';
+      info.textContent = mark.text ? `${t.redactInfo} «${mark.text}»` : t.redactInfo;
+      items.unshift(info);
+    }
+    items.push(this.row(mark.kind === 'signature' || mark.kind === 'redaction' ? [] : [swatches], [remove]));
     const el = view.el.querySelector(`[data-mark="${CSS.escape(id)}"]`);
     const anchor = el?.getBoundingClientRect() ?? view.el.getBoundingClientRect();
     this.openPop(anchor, items, () => el);
@@ -940,7 +1004,7 @@ export class Editor {
     const items = [
       ...(this.options.files !== false ? [item('open', t.open, '', () => void this.pick(false)), item('filePlus', t.insert, '', () => void this.pick(true))] : []),
       item('print', t.print, '', () => void this.viewer?.print()),
-      item('download', t.download, '', () => void this.viewer?.download()),
+      item('download', t.download, '', () => void this.saveOrDownload()),
       item('flatten', t.downloadFlat, t.downloadFlatHint, () => void this.downloadFlat()),
     ];
     this.openPop(anchor.getBoundingClientRect(), items);
@@ -957,9 +1021,7 @@ export class Editor {
   }
 
   private async downloadFlat() {
-    if (!this.current) return;
-    const bytes = await savePdf(this.current, { flatten: true, font: this.options.font });
-    this.give(bytes, this.current.name);
+    await this.saveOrDownload(true);
   }
 
   private give(bytes: Uint8Array, name: string) {
@@ -977,11 +1039,27 @@ export class Editor {
     return savePdf(this.current, { font: this.options.font, ...options });
   }
 
-  private async saveOrDownload() {
-    if (!this.current) return;
-    if (!this.options.onSave) return this.viewer?.download();
-    await this.options.onSave(await savePdf(this.current, { font: this.options.font }), this.current);
-    this.toast(this.t.saved);
+  /** Saves (with onSave) or downloads the PDF, and says what saving it did: to its signature, to what was blacked out. */
+  private async saveOrDownload(flatten = false) {
+    const pdf = this.current;
+    if (!pdf) return;
+    const incremental = savesIncrementally(pdf);
+    const bytes = await savePdf(pdf, { font: this.options.font, flatten });
+    if (this.options.onSave && !flatten) await this.options.onSave(bytes, pdf);
+    else this.give(bytes, pdf.name);
+    const t = this.t;
+    const blacked = pdf.marks.filter((m) => m.kind === 'redaction').length;
+    const signed = pdf.signatures?.length;
+    const why = whyNotIncremental(pdf);
+    let notice = this.options.onSave && !flatten ? t.saved : '';
+    if (signed) notice = incremental ? t.signatureHolds : fill(t.signatureBroken, { why: why?.includes('blacked') ? t.becauseBlacked : t.becausePages });
+    if (blacked) {
+      // What is shown is what was saved: what was under the boxes is gone from it, as from the file.
+      const saved = await openPdf(bytes, { name: pdf.name });
+      this.setPdf(saved);
+      notice = `${fill(t.redactedSaved, { n: blacked })}${signed ? ` ${notice}` : ''}`;
+    }
+    if (notice) this.toast(notice);
   }
 
   /** The pages the thumbnails act on: those chosen, or the page in view. */

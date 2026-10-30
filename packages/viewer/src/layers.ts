@@ -166,6 +166,18 @@ export function renderMarks(layer: HTMLElement, marks: Mark[], geo: Geometry, t:
         layer.append(el);
         break;
       }
+      case 'redaction':
+        // What will be blacked out when saved: black, edged in red until then.
+        for (const rect of mark.rects) {
+          const el = doc.createElement('div');
+          el.className = 'rp-mark rp-mark-redaction';
+          el.dataset.mark = mark.id;
+          el.setAttribute('role', 'img');
+          el.setAttribute('aria-label', t.redaction);
+          place(el, geo.toScreenRect(rect));
+          layer.append(el);
+        }
+        break;
       case 'signature': {
         const el = doc.createElement('div');
         el.className = 'rp-mark rp-mark-signature';

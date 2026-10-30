@@ -412,3 +412,58 @@ test('the zoom of the wheel keeps still the place under the pointer', async ({ p
   expect(Math.abs(after.x - before.x)).toBeLessThan(20);
   expect(Math.abs(after.y - before.y)).toBeLessThan(20);
 });
+
+test('text blacked out, by a box and by a selection, is gone from the PDF saved and from the one shown', async ({ page }) => {
+  await page.keyboard.press('r');
+  await expect(page.getByRole('button', { name: 'Black out' })).toHaveAttribute('aria-pressed', 'true');
+  const title = pageEl(page, 1).locator('.textLayer span', { hasText: 'Service agreement' }).first();
+  const t = (await title.boundingBox())!;
+  await page.mouse.move(t.x - 4, t.y - 4);
+  await page.mouse.down();
+  await page.mouse.move(t.x + t.width + 4, t.y + t.height + 4, { steps: 6 });
+  await page.mouse.up();
+  await expect(pageEl(page, 1).locator('.rp-mark-redaction')).toHaveCount(1);
+  // A selection, from the bar over it.
+  await page.keyboard.press('v');
+  const intro = pageEl(page, 1).locator('.textLayer span', { hasText: 'This agreement is made' });
+  const i = (await intro.boundingBox())!;
+  await page.mouse.move(i.x + 2, i.y + i.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(i.x + i.width * 0.4, i.y + i.height / 2, { steps: 6 });
+  await page.mouse.up();
+  await page.getByRole('button', { name: 'Black out the selected text' }).click();
+  await expect(pageEl(page, 1).locator('.rp-mark-redaction')).toHaveCount(2);
+
+  const { pdf } = await downloaded(page);
+  const { pageText } = await import('@rebopdf/core');
+  const text = (await pageText(pdf, pdf.pages[0].id)).text;
+  expect(text).not.toContain('Service agreement');
+  expect(text).not.toContain('This agreement is');
+  expect(text).toContain('The client');
+  await expect(page.getByRole('status')).toHaveText(/Saved with 2 parts blacked out for good/);
+  // What is shown is the PDF saved: no box is left to undo, and the text under them is not there to select.
+  await expect(pageEl(page, 1).locator('.rp-mark-redaction')).toHaveCount(0);
+  await expect(pageEl(page, 1).locator('.textLayer span', { hasText: 'Service agreement' })).toHaveCount(0);
+});
+
+test('a signed PDF is saved after its signature, its bytes as they came', async ({ page }) => {
+  const { PDFDocument, PDFHexString, PDFString } = await import('@cantoo/pdf-lib');
+  const doc = await PDFDocument.load(await samplePdfBytes('en'));
+  const { context } = doc;
+  const value = context.register(context.obj({ Type: 'Sig', Name: PDFString.of('Ana García'), Contents: PDFHexString.of('00'.repeat(32)) }));
+  const widget = context.register(context.obj({ Type: 'Annot', Subtype: 'Widget', FT: 'Sig', T: PDFString.of('Signature1'), Rect: [64, 200, 264, 260], P: doc.getPage(1).ref, V: value }));
+  doc.getPage(1).node.addAnnot(widget);
+  doc.getForm().acroForm.addField(widget);
+  const original = Buffer.from(await doc.save({ useObjectStreams: false }));
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'More' }).click();
+  await page.getByRole('menuitem', { name: 'Open a PDF…' }).click();
+  await (await chooser).setFiles({ name: 'Signed.pdf', mimeType: 'application/pdf', buffer: original });
+  await expect(page.getByRole('status')).toHaveText('Signed by Ana García. What you change is added after the signature, which still holds.');
+  await page.getByRole('textbox', { name: 'Full name' }).fill('Luis');
+  const { bytes, pdf } = await downloaded(page);
+  expect(Buffer.from(bytes.subarray(0, original.length)).equals(original)).toBe(true);
+  expect(pdf.fields.find((f) => f.name === 'client.name')?.value).toBe('Luis');
+  expect(pdf.signatures).toHaveLength(1);
+  await expect(page.getByRole('status')).toHaveText('Saved after the signature: it still holds.');
+});

@@ -49,17 +49,42 @@ export function pdfjs(): Promise<PdfJs> {
   return loading;
 }
 
+/** In Node, the folder of pdfjs-dist on the disk: its fonts and maps are read from there, with no address to give. */
+function nodeAssets(): string | undefined {
+  if (typeof document !== 'undefined' || typeof process === 'undefined' || !process.versions?.node) return undefined;
+  try {
+    const { createRequire } = process.getBuiltinModule('module');
+    const { dirname, sep } = process.getBuiltinModule('path');
+    return dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json')) + sep;
+  } catch {
+    return undefined;
+  }
+}
+
+/** What PDF.js is given to open a file: its bytes (a copy: PDF.js takes them away to its worker), and where its fonts and maps are. */
+function source(bytes: Uint8Array) {
+  const base = assets ?? nodeAssets();
+  return { data: bytes.slice(), verbosity: 0, ...(base ? { cMapUrl: `${base}cmaps/`, cMapPacked: true, standardFontDataUrl: `${base}standard_fonts/` } : {}) };
+}
+
 const opened = new WeakMap<Uint8Array, Promise<PdfJsDocument>>();
 
 /** The file as PDF.js has it, read once for every Pdf that shares it. */
 export function readerOf(bytes: Uint8Array): Promise<PdfJsDocument> {
   let reading = opened.get(bytes);
   if (!reading) {
-    // PDF.js takes the bytes it is given away to its worker: it is given a copy.
-    reading = pdfjs().then(
-      (lib) => lib.getDocument({ data: bytes.slice(), verbosity: 0, ...(assets ? { cMapUrl: `${assets}cmaps/`, cMapPacked: true, standardFontDataUrl: `${assets}standard_fonts/` } : {}) }).promise,
-    );
+    reading = pdfjs().then((lib) => lib.getDocument(source(bytes)).promise);
     opened.set(bytes, reading);
   }
   return reading;
+}
+
+/** A file read by PDF.js for once, apart from the one every Pdf shares: to be drawn with values of its own, and let go. */
+export async function freshReaderOf(bytes: Uint8Array): Promise<PdfJsDocument> {
+  return (await pdfjs()).getDocument(source(bytes)).promise;
+}
+
+/** The file of a Pdf as PDF.js draws it: without the annotations taken as marks. */
+export function readerFor(pdf: { sources: Record<string, Uint8Array>; drawn?: Record<string, Uint8Array> }, source: string): Promise<PdfJsDocument> {
+  return readerOf(pdf.drawn?.[source] ?? pdf.sources[source]);
 }

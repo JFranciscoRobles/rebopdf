@@ -149,6 +149,21 @@ describe('the MCP server', () => {
     expect(await call('add_note', { page: 1, text: 'Unreadable', x: 20, y: 20 })).toMatch(/^Added a note on page 1/);
   });
 
+  it('blacks out text and parts of pages for good, and says so', async () => {
+    const { dir, call } = await setup();
+    await call('open_pdf', { file: 'contract.pdf' });
+    expect((await call('redact_text', { text: 'thirty days' })).text).toBe('Blacked out 2 places (page 1, page 2), for good when the PDF is saved.');
+    expect((await call('search_pdf', { text: 'thirty days' })).text).toBe('"thirty days" is not in contract.pdf.');
+    expect((await call('redact_text', { text: 'thirty days' })).error).toBe(true);
+    expect((await call('redact_area', { page: 2, x: 64, y: 700, width: 200, height: 80 })).text).toBe('Blacked out a box of page 2, for good when the PDF is saved.');
+    expect((await call('list_marks')).text).toContain('blacked out when saved: "thirty days"');
+    expect((await call('save_pdf', { file: 'redacted.pdf' })).text).toMatch(/3 parts blacked out for good: what was under them is not in the file\.$/);
+    const saved = await openPdf(new Uint8Array(await readFile(join(dir, 'redacted.pdf'))));
+    const text = (await Promise.all(saved.pages.map((p) => pageText(saved, p.id)))).map((t) => t.text).join('\n');
+    expect(text).not.toContain('thirty');
+    expect(text).toContain('Confidentiality');
+  });
+
   it('keeps to its folders', async () => {
     const { call } = await setup();
     const outside = await call('open_pdf', { file: '/etc/hosts' });

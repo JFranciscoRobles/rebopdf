@@ -111,9 +111,9 @@ function markOf(doc: PDFDocument, dict: PDFDict, page: string): Mark | undefined
 /**
  * Takes the highlights, notes and ink of the pages out of the document, as
  * marks of the pages of these ids (in the order of the document), with the
- * popups that went with them. Says nothing was taken with an empty list.
+ * popups that went with them; says which annotations it took, by reference.
  */
-export function takeMarks(doc: PDFDocument, pages: Page[]): Mark[] {
+export function takeMarks(doc: PDFDocument, pages: Page[]): { marks: Mark[]; refs: string[] } {
   const { context } = doc;
   const all = doc.getPages();
   const dictOf = (ref: PDFObject) => {
@@ -129,6 +129,7 @@ export function takeMarks(doc: PDFDocument, pages: Page[]): Mark[] {
     }
   }
   const marks: Mark[] = [];
+  const refs: string[] = [];
   all.forEach((page, i) => {
     const list = page.node.Annots();
     if (!list || !pages[i]) return;
@@ -142,10 +143,26 @@ export function takeMarks(doc: PDFDocument, pages: Page[]): Mark[] {
         continue;
       }
       marks.push(mark);
+      if (ref instanceof PDFRef) refs.push(String(ref));
       const popup = dict!.get(name('Popup'));
-      if (popup) popups.add(String(popup));
+      if (popup) {
+        popups.add(String(popup));
+        refs.push(String(popup));
+      }
     }
     if (kept.length !== list.size()) page.node.set(name('Annots'), context.obj(kept.filter((ref) => !popups.has(String(ref)))));
   });
-  return marks;
+  return { marks, refs };
+}
+
+/** Takes these annotations off the pages of a document: those taken as marks, to be written again as they are now. */
+export function dropAnnotations(doc: PDFDocument, refs: string[]): void {
+  if (!refs.length) return;
+  const gone = new Set(refs);
+  for (const page of doc.getPages()) {
+    const list = page.node.Annots();
+    if (!list) continue;
+    const kept = list.asArray().filter((ref) => !gone.has(String(ref)));
+    if (kept.length !== list.size()) page.node.set(name('Annots'), doc.context.obj(kept));
+  }
 }

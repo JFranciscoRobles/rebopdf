@@ -1,6 +1,6 @@
 {
   "name": "@rebopdf/viewer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A PDF shown in the page: its pages drawn as they are needed, thumbnails, zoom, search, text to select, and the fields and marks of the engine over them.",
   "license": "MIT",
   "private": true,

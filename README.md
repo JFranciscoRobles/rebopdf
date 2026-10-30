@@ -10,7 +10,7 @@ and Spanish.
 
 It is the PDFs of the Rebo suite, beside [Rebodocs](https://rebodocs.com),
 Rebosheets, ReboSlides, ReboFiles, Rebomail and ReboNotes. It is early:
-version 0.1.
+version 0.2.
 
 ## Quick start
 
@@ -64,6 +64,8 @@ await writeFile('filled.pdf', await savePdf(pdf)); // or { flatten: true }
 - **A phone:** the tools at the foot of the pages, two fingers to zoom.
 - **The keyboard:** every tool by a key, Enter to put a note, a text or a signature in the middle of the view, the thumbnails moved by Alt and the arrows.
 - **One history:** ⌘Z and ⇧⌘Z through every change, fields typed in included.
+- **Blacking out, for good:** boxes drawn, or text selected, are blacked out when the PDF is saved, and what was under them (text, pictures, what fields hold) is taken out of the file, not only covered. Pages with boxes are saved as pictures with the boxes burnt in, their other text kept unseen over them, to be found and selected.
+- **Signed PDFs:** what is changed in a PDF with a digital signature is added after its bytes as they came, so the signature still holds; the editor says who signed, and whether the signature still holds once saved.
 - **Saving:** a PDF any reader opens, or flattened, with the fields and the marks drawn into the pages for good.
 
 ## Packages
@@ -102,7 +104,8 @@ The assistant opens a PDF (`open_pdf`), reads it page by page (`read_pdf`),
 finds text (`search_pdf`), fills its form (`list_fields`, `fill_fields`),
 highlights text and puts notes and text by a text of the page
 (`highlight_text`, `add_note`, `add_text`), signs it with a picture of a
-signature the person gives (`sign`), turns, deletes, moves, joins and takes
+signature the person gives (`sign`), blacks out text and parts of pages for
+good (`redact_text`, `redact_area`), turns, deletes, moves, joins and takes
 out pages, and writes it (`save_pdf`), to a copy unless it is told the file.
 `--root` keeps it to those folders.
 
@@ -121,7 +124,7 @@ npm run lint
 
 | | |
 | --- | --- |
-| V · H · N · D · T · S | Select and fill · Highlight · Note · Draw · Text · Sign |
+| V · H · N · D · T · S · R | Select and fill · Highlight · Note · Draw · Text · Sign · Black out |
 | ⌘F | Search |
 | ⌘Z · ⇧⌘Z | Undo · Redo |
 | ⌘+ · ⌘− · ⌘0 | Zoom in · out · automatic (⌘ and the wheel, or two fingers: toward where they are) |

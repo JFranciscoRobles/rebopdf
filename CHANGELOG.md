@@ -4,7 +4,41 @@ Every package of ReboPDF is released at the same version. Before 1.0, a
 minor version (0.x.0) may change the API; such changes are listed under
 **Changed** with what to do about them.
 
-## Unreleased
+## 0.2.0 — unreleased
+
+The first version to go to npm: 0.1.0 never went, and what it has is here.
+
+### Added
+
+- **Blacking out, for good** (`kind: 'redaction'` marks, the Black out
+  tool, R, and Black out on the bar over a selection; `redact_text` and
+  `redact_area` of the MCP server). When the PDF is saved, what is under
+  the boxes is taken out of the file, not only covered: a page with boxes is
+  drawn by PDF.js as a picture with what its fields hold, the boxes are
+  burnt into it, and the picture is all the page is; its text out of the
+  boxes is put back over it unseen, to be found and selected; its links out
+  of them stay. Marks over a box go with it, the fields of the page are part
+  of its picture, and the tagged structure of the PDF, which keeps its text
+  apart from its pages, goes. Before it is saved, what is blacked out is not
+  found any more. Once saved, the editor shows the PDF saved.
+- **Saving by adding to the file** (`incremental` of `savePdf`): the bytes
+  of the file stay as they came and the changes go after them, as signing
+  needs, so a digital signature it carries still holds. Done by itself for
+  a signed PDF ('auto'), always when asked (true), and never for pages of
+  more than one PDF or anything blacked out, which `whyNotIncremental` says.
+  The signatures of a PDF are read (`pdf.signatures`: who, when, why); the
+  editor says a PDF is signed when it is opened, and whether its signature
+  still holds when it is saved; so does the MCP server.
+- The annotations a PDF comes with are taken as marks without writing its
+  bytes again: PDF.js draws it from bytes without them (`pdf.drawn`), and
+  they are taken off its pages when it is saved (`pdf.taken`).
+
+### Fixed
+
+- A signature field, and a button, were taken out of the form when the PDF
+  was saved: only the fields the engine fills are now.
+
+## 0.1.0 — never published
 
 ### Added
 

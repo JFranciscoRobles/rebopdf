@@ -15,6 +15,7 @@ import {
   PdfError,
   pageSize,
   pageText,
+  readerFor,
   readerOf,
   removeMark,
   removePages,
@@ -29,7 +30,8 @@ import {
 
 const reopen = async (pdf: Pdf, flatten = false, marks = true) => openPdf(await savePdf(pdf, { flatten }), { marks });
 const annotations = async (pdf: Pdf) => {
-  const reader = await readerOf(Object.values(pdf.sources)[0]);
+  // As PDF.js draws the file: without the annotations taken as marks.
+  const reader = await readerFor(pdf, Object.keys(pdf.sources)[0]);
   const out: string[][] = [];
   for (let i = 1; i <= reader.numPages; i++) out.push((await (await reader.getPage(i)).getAnnotations()).filter((a) => a.subtype !== 'Widget' && a.subtype !== 'Link').map((a) => a.subtype));
   return out;

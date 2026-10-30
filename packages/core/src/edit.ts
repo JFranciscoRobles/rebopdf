@@ -81,7 +81,23 @@ export function insertPdf(pdf: Pdf, other: Pdf, at = pdf.pages.length): Pdf {
   }));
   const marks = other.marks.map((mark) => ({ ...mark, id: pdf.marks.some((m) => m.id === mark.id) ? uid('m') : mark.id, page: pageIds[mark.page] }));
   const place = Math.max(0, Math.min(at, pdf.pages.length));
-  return { ...pdf, sources, pages: [...pdf.pages.slice(0, place), ...pages, ...pdf.pages.slice(place)], fields: [...pdf.fields, ...fields], marks: [...pdf.marks, ...marks] };
+  const byFile = <T>(mine: Record<string, T> | undefined, theirs: Record<string, T> | undefined) => {
+    const all = { ...mine, ...Object.fromEntries(Object.entries(theirs ?? {}).map(([id, value]) => [renamed[id], value])) };
+    return Object.keys(all).length ? all : undefined;
+  };
+  const drawn = byFile(pdf.drawn, other.drawn);
+  const taken = byFile(pdf.taken, other.taken);
+  const signatures = [...(pdf.signatures ?? []), ...(other.signatures ?? []).map((s) => ({ ...s, source: renamed[s.source] }))];
+  return {
+    ...pdf,
+    sources,
+    pages: [...pdf.pages.slice(0, place), ...pages, ...pdf.pages.slice(place)],
+    fields: [...pdf.fields, ...fields],
+    marks: [...pdf.marks, ...marks],
+    ...(drawn ? { drawn } : {}),
+    ...(taken ? { taken } : {}),
+    ...(signatures.length ? { signatures } : {}),
+  };
 }
 
 /** Puts a blank page before the page at this place (from 0), or at the end: as big as the page before it, or as this size in points. */
@@ -100,8 +116,16 @@ export function extractPages(pdf: Pdf, ids: string[], name?: string): Pdf {
   if (!set.size) throw new PdfError('empty', 'A PDF keeps one page at least.');
   const kept = keepPages(pdf, (page) => set.has(page.id));
   const used = new Set(kept.pages.map((page) => page.source));
-  const sources = Object.fromEntries(Object.entries(pdf.sources).filter(([id]) => used.has(id)));
-  return { ...kept, sources, name: name ?? pdf.name.replace(/(\.pdf)?$/i, ' (pages).pdf') };
+  const only = <T>(all: Record<string, T> | undefined) => (all ? Object.fromEntries(Object.entries(all).filter(([id]) => used.has(id))) : undefined);
+  const signatures = pdf.signatures?.filter((s) => used.has(s.source));
+  return {
+    ...kept,
+    sources: only(pdf.sources)!,
+    drawn: only(pdf.drawn),
+    taken: only(pdf.taken),
+    signatures: signatures?.length ? signatures : undefined,
+    name: name ?? pdf.name.replace(/(\.pdf)?$/i, ' (pages).pdf'),
+  };
 }
 
 function keepPages(pdf: Pdf, keep: (page: Page) => boolean): Pdf {

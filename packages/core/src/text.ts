@@ -4,7 +4,8 @@
 // end of a line.
 
 import { pageById } from './edit';
-import { readerOf } from './pdfjs';
+import { outside, redactedOn } from './geometry';
+import { readerFor } from './pdfjs';
 import { type Pdf, PdfError, type Rect } from './types';
 
 /** A run of text on a page, from `start` in the text of the page. */
@@ -25,8 +26,10 @@ export interface PageText {
 export async function pageText(pdf: Pdf, id: string): Promise<PageText> {
   const page = pageById(pdf, id);
   if (!page) throw new PdfError('not-found', `There is no page ${id}.`);
-  const reader = await readerOf(pdf.sources[page.source]);
+  const reader = await readerFor(pdf, page.source);
   const content = await (await reader.getPage(page.index + 1)).getTextContent();
+  // What is blacked out is not text of the page any more, before it is saved as after.
+  const redacted = redactedOn(pdf, id);
   let text = '';
   const runs: TextRun[] = [];
   for (const item of content.items) {
@@ -34,8 +37,12 @@ export async function pageText(pdf: Pdf, id: string): Promise<PageText> {
     const [, , c, d, e, f] = item.transform as number[];
     const size = Math.hypot(c, d) || item.height;
     if (item.str) {
-      runs.push({ text: item.str, start: text.length, rect: { x: e, y: f - size * 0.22, width: item.width, height: size * 1.16 } });
-      text += item.str;
+      const pieces = outside(item.str, { x: e, y: f - size * 0.22, width: item.width, height: size * 1.16 }, redacted);
+      pieces.forEach((piece, i) => {
+        if (i) text += ' ';
+        runs.push({ text: piece.text, start: text.length, rect: piece.rect });
+        text += piece.text;
+      });
     }
     if (item.hasEOL) text += '\n';
   }

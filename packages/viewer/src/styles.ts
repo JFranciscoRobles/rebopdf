@@ -130,6 +130,8 @@ const CSS = `
 
 .rp-mark { position: absolute; }
 .rp-mark-highlight { mix-blend-mode: multiply; }
+/* Over the text it hides, which is not selected through it. */
+.rp-mark-redaction { background: #000; outline: 1.5px solid #e03131; outline-offset: 0; pointer-events: auto; }
 .rp-mark-note { display: grid; place-items: center; padding: 0; border: 0; background: none; pointer-events: auto; cursor: pointer; }
 .rp-mark-note svg { width: 100%; height: 100%; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25)); }
 .rp-mark-text { white-space: pre-wrap; overflow-wrap: break-word; font-family: Helvetica, Arial, sans-serif; line-height: 1.25; }

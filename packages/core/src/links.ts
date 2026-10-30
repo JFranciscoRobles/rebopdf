@@ -4,7 +4,8 @@
 // as they are now: a link to a page taken out leads nowhere.
 
 import { pageById } from './edit';
-import { readerOf } from './pdfjs';
+import { overlaps, redactedOn } from './geometry';
+import { readerFor } from './pdfjs';
 import type { Pdf, Rect } from './types';
 
 /** A place of the PDF: a page, and how far from its bottom the place is, in points, when the PDF says so. */
@@ -27,7 +28,7 @@ export interface OutlineItem {
   items: OutlineItem[];
 }
 
-type Reader = Awaited<ReturnType<typeof readerOf>>;
+type Reader = Awaited<ReturnType<typeof readerFor>>;
 
 /** The page of the Pdf a destination of a file leads to, and how high on it. */
 async function placeOf(pdf: Pdf, source: string, reader: Reader, dest: unknown): Promise<Place | undefined> {
@@ -51,13 +52,16 @@ async function placeOf(pdf: Pdf, source: string, reader: Reader, dest: unknown):
 export async function linksOf(pdf: Pdf, id: string): Promise<PageLink[]> {
   const page = pageById(pdf, id);
   if (!page) return [];
-  const reader = await readerOf(pdf.sources[page.source]);
+  const reader = await readerFor(pdf, page.source);
   const annotations = await (await reader.getPage(page.index + 1)).getAnnotations({ intent: 'display' });
   const links: PageLink[] = [];
+  const redacted = redactedOn(pdf, id);
   for (const a of annotations) {
     if (a.subtype !== 'Link' || !Array.isArray(a.rect)) continue;
     const [x1, y1, x2, y2] = a.rect as number[];
     const rect = { x: Math.min(x1, x2), y: Math.min(y1, y2), width: Math.abs(x2 - x1), height: Math.abs(y2 - y1) };
+    // A link under what is blacked out goes with it.
+    if (redacted.some((box) => overlaps(rect, box))) continue;
     if (typeof a.url === 'string' && /^(https?|mailto|tel):/i.test(a.url)) links.push({ rect, url: a.url });
     else if (a.dest) {
       const to = await placeOf(pdf, page.source, reader, a.dest);
@@ -71,7 +75,7 @@ export async function linksOf(pdf: Pdf, id: string): Promise<PageLink[]> {
 export async function outlineOf(pdf: Pdf): Promise<OutlineItem[]> {
   const out: OutlineItem[] = [];
   for (const source of [...new Set(pdf.pages.map((p) => p.source))]) {
-    const reader = await readerOf(pdf.sources[source]);
+    const reader = await readerFor(pdf, source);
     const outline = await reader.getOutline().catch(() => null);
     const walk = async (items: { title: string; dest: unknown; items: unknown[] }[]): Promise<OutlineItem[]> =>
       Promise.all(items.map(async (item) => ({ title: item.title, ...(await placeOf(pdf, source, reader, item.dest).then((to) => (to ? { to } : {}))), items: await walk(item.items as never) })));
