@@ -506,7 +506,8 @@ export class Editor {
   /** Whether pages can be turned, moved, deleted and put in: in a room they cannot, so that they are the same for everyone. */
   lockPages(locked: boolean): void {
     this.pagesLocked = locked;
-    if (this.viewer) this.viewer.slots.side.hidden = locked;
+    // A class of the root, not `hidden`: the viewer shows its actions again as it shows the thumbnails.
+    this.viewer?.root.classList.toggle('rp-pages-locked', locked);
     for (const li of this.viewer?.root.querySelectorAll<HTMLElement>('.rp-thumb') ?? []) li.draggable = !locked;
   }
 

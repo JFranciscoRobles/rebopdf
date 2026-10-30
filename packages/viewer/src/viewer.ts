@@ -167,7 +167,7 @@ export class Viewer {
     const bar = make('div', 'rp-bar');
     bar.setAttribute('role', 'toolbar');
     bar.setAttribute('aria-label', t.viewer);
-    this.slots = { start: make('div', 'rp-group'), tools: make('div', 'rp-group rp-tools'), end: make('div', 'rp-group'), side: make('div', 'rp-group') };
+    this.slots = { start: make('div', 'rp-group'), tools: make('div', 'rp-group rp-tools'), end: make('div', 'rp-group'), side: make('div', 'rp-group rp-side-actions') };
     this.sideButton = this.button('sidebar', t.showPages, () => this.toggleThumbnails());
     this.sideButton.setAttribute('aria-expanded', 'false');
     this.titleEl = make('div', 'rp-title');
