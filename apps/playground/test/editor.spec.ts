@@ -258,7 +258,7 @@ test('the menu is a screen of its parts: the pages fit from the foot, the appear
   await expect(page.getByRole('combobox', { name: 'Zoom' })).toHaveValue('fit-page');
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
   const menu = page.getByRole('dialog', { name: 'Menu' });
-  await expect(menu.getByRole('tab')).toHaveText(['Document', 'Export', 'Sign', 'Tools', 'Language', 'Appearance']);
+  await expect(menu.getByRole('tab')).toHaveText(['Document', 'Export', 'Digital signature', 'Tools', 'Language', 'Appearance']);
   await expect(menu.getByRole('tab', { name: 'Document' })).toBeFocused();
   for (const scheme of ['light', 'dark'] as const) {
     // Still, so that what is measured is not the screen coming in.

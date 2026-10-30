@@ -9,7 +9,7 @@ describe('the editor', () => {
     document.body.append(host);
     const editor = mountEditor(host, { pdf: await samplePdf('es'), locale: 'es' });
     const labels = [...host.querySelectorAll('button')].map((b) => b.getAttribute('aria-label'));
-    expect(labels).toEqual(expect.arrayContaining(['Seleccionar y rellenar', 'Resaltar', 'Nota', 'Dibujar', 'Texto', 'Firmar', 'Deshacer', 'Rehacer', 'Menú', 'Eliminar páginas']));
+    expect(labels).toEqual(expect.arrayContaining(['Seleccionar y rellenar', 'Resaltar', 'Nota', 'Dibujar', 'Texto', 'Firma a mano', 'Deshacer', 'Rehacer', 'Menú', 'Eliminar páginas']));
     expect(host.querySelectorAll('.rp-page')).toHaveLength(2);
     expect(host.querySelector<HTMLButtonElement>('[aria-label="Deshacer"]')!.disabled).toBe(true);
     editor.destroy();

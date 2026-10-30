@@ -188,6 +188,10 @@ The first version to go to npm: 0.1.0 never went, and what it has is here.
   (`lang`), the menu keeps the keyboard and screen readers in it while it
   is open (what is under it is inert), and the playground keeps the
   language of the page and the name of the PDF in its title.
+- **Two signatures, told apart**: the tool of the bar is Handwritten
+  signature (S), a picture put on the page; the part of the menu is
+  Digital signature, with its own icon, and says what each proves. It
+  offers both: Sign digitally… and the handwritten one.
 
 ### Fixed
 

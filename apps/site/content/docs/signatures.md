@@ -2,11 +2,11 @@
 
 ## A picture of a signature
 
-The Sign tool (S) asks for a signature drawn, typed or a picture, and puts it where you click; a signature field of the PDF says Sign here, and puts it in its box. It is drawn into the page.
+The Handwritten signature tool (S) asks for a signature drawn, typed or a picture, and puts it where you click; a signature field of the PDF says Sign here, and puts it in its box. It is drawn into the page.
 
 ## Digital signatures
 
-Signing digitally proves who signed and that nothing changed after: Sign digitally… in the menu, or in code:
+Signing digitally proves who signed and that nothing changed after: Sign digitally… under Digital signature in the menu, or in code:
 
 ```ts
 import { signPdf, checkSignatures } from '@rebopdf/core';

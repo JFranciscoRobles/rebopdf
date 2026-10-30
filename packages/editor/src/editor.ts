@@ -2070,11 +2070,14 @@ export class Editor {
       },
       {
         id: 'sign',
-        icon: 'signature',
+        icon: 'seal',
         label: t.menuSign,
         intro: t.menuSignText,
         look: 'rows',
-        entries: [{ icon: 'signature', label: t.signDigitally, hint: t.signDigitallyHint, run: () => void this.signDigitally() }],
+        entries: [
+          { icon: 'seal', label: t.signDigitally, hint: t.signDigitallyHint, run: () => void this.signDigitally() },
+          ...(this.mayUse('sign') ? [{ icon: 'signature' as const, label: t.sign, hint: t.signHint, run: () => void this.setTool('sign') }] : []),
+        ],
       },
       ...(tools.length ? [{ id: 'tools', icon: 'tools' as const, label: t.menuTools, look: 'rows' as const, entries: tools }] : []),
     ];

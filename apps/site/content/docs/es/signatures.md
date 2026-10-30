@@ -2,11 +2,11 @@
 
 ## Una imagen de la firma
 
-La herramienta Firmar (S) pide una firma dibujada, escrita o en imagen, y la pone donde haces clic; un campo de firma del PDF dice Firmar aquí y la pone en su recuadro. Se dibuja en la página.
+La herramienta Firma a mano (S) pide una firma dibujada, escrita o en imagen, y la pone donde haces clic; un campo de firma del PDF dice Firmar aquí y la pone en su recuadro. Se dibuja en la página.
 
 ## Firmas digitales
 
-Firmar digitalmente prueba quién firmó y que nada cambió después: Firmar digitalmente… en el menú, o en código:
+Firmar digitalmente prueba quién firmó y que nada cambió después: Firmar digitalmente… en Firma digital del menú, o en código:
 
 ```ts
 import { signPdf, checkSignatures } from '@rebopdf/core';
