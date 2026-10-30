@@ -540,42 +540,201 @@ export class Editor {
   }
 
   /** What the editor adds to a bookmark: renamed, moved up, down, in and out, and taken away. */
+  /**
+   * What is done to a bookmark: from one button at the end of its row, which
+   * opens them as a menu, or from the keyboard on the bookmark (F2, Delete,
+   * Alt and the arrows), so that the list stays one stop of Tab.
+   */
   private decorateBookmark(row: HTMLElement, path: number[], item: OutlineItem) {
     const t = this.t;
-    const tools = this.doc.createElement('div');
-    tools.className = 'rp-outline-tools';
-    const act = (name: IconName, label: string, change: (items: OutlineItem[]) => void) => this.button(name, fill(label, { title: item.title }), () => void this.changeOutline(change), 14);
-    const move = (by: -1 | 1) => (items: OutlineItem[]) => {
-      const [list, i] = Editor.siblings(items, path);
-      const j = i + by;
-      if (j < 0 || j >= list.length) return;
-      [list[i], list[j]] = [list[j], list[i]];
+    const actions = this.bookmarkActions(path, item);
+    const more = this.button('more', fill(t.bookmarkActions, { title: item.title }), () => this.bookmarkMenu(more, actions), 14);
+    more.classList.add('rp-outline-more');
+    more.tabIndex = -1;
+    more.setAttribute('aria-haspopup', 'menu');
+    row.append(more);
+    const go = row.querySelector<HTMLElement>('.rp-outline-item');
+    go?.setAttribute('aria-keyshortcuts', 'F2 Delete Alt+ArrowUp Alt+ArrowDown Alt+ArrowRight Alt+ArrowLeft Shift+F10');
+    go?.addEventListener('keydown', (event) => {
+      const action = actions.find((a) => a.keys.includes(event.key) && (a.key.startsWith('Alt') ? event.altKey : !event.altKey));
+      if ((event.key === 'F10' && event.shiftKey) || event.key === 'ContextMenu') {
+        event.preventDefault();
+        this.bookmarkMenu(more, actions);
+      } else if (action) {
+        event.preventDefault();
+        event.stopPropagation();
+        action.run();
+      }
+    });
+  }
+
+  /** What can be done to a bookmark, with the key that does it, each going back to the bookmark where it is then. */
+  private bookmarkActions(path: number[], item: OutlineItem) {
+    const t = this.t;
+    const title = item.title;
+    /** Changes the bookmarks, and gives the keyboard back to this one, where it is now. */
+    // Where it is among the others, as they are drawn: what may be done to it.
+    const li = () => this.viewer?.root.querySelector(`.rp-outline .rp-outline-row[data-path="${path.join('.')}"]`)?.closest('li');
+    const first = () => !li()?.previousElementSibling;
+    const last = () => !li()?.nextElementSibling;
+    const change = (label: string, key: string, keys: string[], name: IconName, can: () => boolean, move: (items: OutlineItem[]) => number[] | undefined) => ({
+      label: fill(label, { title }),
+      key,
+      keys,
+      icon: name,
+      can,
+      run: () =>
+        void (async () => {
+          if (!can()) return;
+          let to: number[] | undefined;
+          let after: OutlineItem[] = [];
+          await this.changeOutline((items) => {
+            to = move(items);
+            after = items;
+          });
+          // The one at that place then: this one, or, taken away, the one in its place.
+          const there = to?.reduce<OutlineItem | undefined>((at, i, n) => (n === 0 ? after[i] : at?.items[i]), undefined);
+          if (to && there) await this.focusBookmark(to, there.title);
+        })(),
+    });
+    const parent = path.slice(0, -1);
+    const i = path[path.length - 1];
+    return [
+      { label: fill(t.renameBookmark, { title }), key: 'F2', keys: ['F2'], icon: 'pen' as IconName, can: () => true, run: () => void this.renameBookmark(path) },
+      change(
+        t.bookmarkUp,
+        'Alt+↑',
+        ['ArrowUp'],
+        'chevronUp',
+        () => !first(),
+        (items) => {
+          const [list] = Editor.siblings(items, path);
+          if (i === 0) return undefined;
+          [list[i - 1], list[i]] = [list[i], list[i - 1]];
+          return [...parent, i - 1];
+        },
+      ),
+      change(
+        t.bookmarkDown,
+        'Alt+↓',
+        ['ArrowDown'],
+        'chevronDown',
+        () => !last(),
+        (items) => {
+          const [list] = Editor.siblings(items, path);
+          if (i >= list.length - 1) return undefined;
+          [list[i], list[i + 1]] = [list[i + 1], list[i]];
+          return [...parent, i + 1];
+        },
+      ),
+      // Under the bookmark before it.
+      change(
+        t.bookmarkIn,
+        'Alt+→',
+        ['ArrowRight'],
+        'chevronRight',
+        () => !first(),
+        (items) => {
+          const [list] = Editor.siblings(items, path);
+          if (i === 0) return undefined;
+          const [moved] = list.splice(i, 1);
+          list[i - 1].items.push(moved);
+          return [...parent, i - 1, list[i - 1].items.length - 1];
+        },
+      ),
+      // After the bookmark it is under.
+      change(
+        t.bookmarkOut,
+        'Alt+←',
+        ['ArrowLeft'],
+        'chevronLeft',
+        () => path.length > 1,
+        (items) => {
+          if (path.length < 2) return undefined;
+          const [list] = Editor.siblings(items, path);
+          const [moved] = list.splice(i, 1);
+          const [outer, j] = Editor.siblings(items, parent);
+          outer.splice(j + 1, 0, moved);
+          return [...parent.slice(0, -1), j + 1];
+        },
+      ),
+      change(
+        t.removeBookmark,
+        t.deleteKey,
+        ['Delete', 'Backspace'],
+        'trash',
+        () => true,
+        (items) => {
+          const [list] = Editor.siblings(items, path);
+          list.splice(i, 1);
+          // To the one that takes its place, or the one before it, or the one it was under.
+          return list.length ? [...parent, Math.min(i, list.length - 1)] : parent.length ? parent : undefined;
+        },
+      ),
+    ];
+  }
+
+  /** The menu of what is done to a bookmark, under its button. */
+  private bookmarkMenu(anchor: HTMLElement, actions: ReturnType<Editor['bookmarkActions']>) {
+    const items = actions.map((action) => {
+      const b = this.doc.createElement('button');
+      b.type = 'button';
+      b.className = 'rp-button';
+      b.setAttribute('role', 'menuitem');
+      // What does not apply here stays in its place, said so, and is passed over by the arrows.
+      if (!action.can()) b.setAttribute('aria-disabled', 'true');
+      const words = this.doc.createElement('span');
+      words.textContent = action.label;
+      const key = this.doc.createElement('kbd');
+      key.textContent = action.key;
+      key.setAttribute('aria-hidden', 'true');
+      b.append(icon(this.doc, action.icon, 16), words, key);
+      b.addEventListener('click', () => {
+        if (!action.can()) return;
+        this.closePop();
+        action.run();
+      });
+      return b;
+    });
+    anchor.setAttribute('aria-expanded', 'true');
+    this.openPop(anchor.getBoundingClientRect(), items);
+    const close = this.popClose;
+    this.popClose = () => {
+      anchor.setAttribute('aria-expanded', 'false');
+      close?.();
     };
-    tools.append(
-      this.button('pen', fill(t.renameBookmark, { title: item.title }), () => void this.renameBookmark(path), 14),
-      act('chevronUp', t.bookmarkUp, move(-1)),
-      act('chevronDown', t.bookmarkDown, move(1)),
-      act('chevronRight', t.bookmarkIn, (items) => {
-        // Under the bookmark before it.
-        const [list, i] = Editor.siblings(items, path);
-        if (i === 0) return;
-        const [moved] = list.splice(i, 1);
-        list[i - 1].items.push(moved);
-      }),
-      act('chevronLeft', t.bookmarkOut, (items) => {
-        // After the bookmark it is under.
-        if (path.length < 2) return;
-        const [list, i] = Editor.siblings(items, path);
-        const [moved] = list.splice(i, 1);
-        const [outer, j] = Editor.siblings(items, path.slice(0, -1));
-        outer.splice(j + 1, 0, moved);
-      }),
-      act('trash', t.removeBookmark, (items) => {
-        const [list, i] = Editor.siblings(items, path);
-        list.splice(i, 1);
-      }),
-    );
-    row.append(tools);
+    this.pop?.classList.add('rp-menu', 'rp-bookmark-menu');
+    this.pop?.setAttribute('role', 'menu');
+    this.pop?.setAttribute('aria-label', anchor.getAttribute('aria-label') ?? '');
+    items[0]?.focus();
+    this.pop?.addEventListener('keydown', (event) => {
+      const at = items.indexOf(this.doc.activeElement as HTMLButtonElement);
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        items[(at + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        const go = anchor.closest('.rp-outline-row')?.querySelector<HTMLElement>('.rp-outline-item');
+        this.closePop();
+        go?.focus();
+      }
+    });
+  }
+
+  /** Gives the keyboard to a bookmark, by its path and title, once the bookmarks are drawn again (till then, another may be at that path). */
+  private async focusBookmark(path: number[], title: string) {
+    const key = path.join('.');
+    for (let i = 0; i < 90; i++) {
+      const go = this.viewer?.root.querySelector<HTMLElement>(`.rp-outline .rp-outline-row[data-path="${key}"] .rp-outline-item`);
+      if (go?.isConnected && go.title === title) {
+        for (const b of this.viewer?.root.querySelectorAll<HTMLElement>('.rp-outline-item[tabindex="0"]') ?? []) b.tabIndex = -1;
+        go.tabIndex = 0;
+        go.focus();
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 16));
+    }
   }
 
   /** The name of a bookmark written in its place, kept with Enter, left with Escape. */
@@ -591,7 +750,7 @@ export class Editor {
     if (!row || !go) return;
     const input = this.doc.createElement('input');
     input.className = 'rp-input rp-outline-name';
-    input.value = go.textContent ?? '';
+    input.value = go.title || (go.textContent ?? '');
     input.setAttribute('aria-label', this.t.bookmarkName);
     go.replaceWith(input);
     input.focus();
@@ -601,12 +760,15 @@ export class Editor {
       if (done) return;
       done = true;
       const title = input.value.trim();
-      if (keep && title && title !== go.textContent)
+      if (keep && title && title !== go.title)
         void this.changeOutline((items) => {
           const [list, i] = Editor.siblings(items, path);
           list[i].title = title;
-        });
-      else input.replaceWith(go);
+        }).then(() => this.focusBookmark(path, title));
+      else {
+        input.replaceWith(go);
+        if (!keep) go.focus();
+      }
     };
     input.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') finish(true);

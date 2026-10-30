@@ -137,6 +137,11 @@ export class Viewer {
   private filesList: HTMLElement;
   /** The bookmarks shown open, by their path. */
   private expanded = new Set<string>();
+  /** Each bookmark with a place, in their order, and where it is among the pages. */
+  private outlineEntries: { button: HTMLButtonElement; place: Place }[] = [];
+  private outlineY = new WeakMap<HTMLButtonElement, number>();
+  /** The bookmark of the section being read. */
+  private outlineAt?: HTMLButtonElement;
   private outlineOfPdf?: OutlineItem[];
   private filesOfPdf?: Attachment[];
   /** The files the outline was read from, in their order. */
@@ -190,6 +195,8 @@ export class Viewer {
     this.root = make('div', 'rp-root');
     this.root.setAttribute('role', 'region');
     this.root.setAttribute('aria-label', t.viewer);
+    // What it says is read in its language, whatever the page around it is in.
+    this.root.lang = t === stringsFor('es') ? 'es' : 'en';
     if (options.theme) this.root.dataset.theme = options.theme;
 
     // The bar.
@@ -976,12 +983,18 @@ export class Viewer {
     this.thumbs.hidden = panel !== 'pages';
     this.outlineEl.hidden = panel !== 'contents';
     this.filesEl.hidden = panel !== 'files';
+    if (panel === 'contents') {
+      // Opened, it shows the section being read.
+      this.outlineAt = undefined;
+      for (const b of this.outlineList.querySelectorAll('[aria-current]')) b.removeAttribute('aria-current');
+    }
     this.slots.side.hidden = panel !== 'pages';
     for (const b of this.tabs.querySelectorAll<HTMLElement>('[role="tab"]')) {
       const on = b.dataset.panel === panel;
       b.setAttribute('aria-selected', String(on));
       b.tabIndex = on ? 0 : -1;
     }
+    if (panel === 'contents') this.followOutline();
   }
 
   /** The tabs beside the pages: the contents when the PDF has some, its files when it carries some, both for the editor. */
@@ -1015,6 +1028,7 @@ export class Viewer {
   private async buildOutline() {
     const items = await outlineOf(this.pdf).catch(() => [] as OutlineItem[]);
     const files = !!this.pdf.attachments?.length;
+    this.outlineEntries = [];
     const list = (entries: OutlineItem[], depth: number, at: number[]): HTMLUListElement => {
       const ul = this.doc.createElement('ul');
       entries.forEach((item, index) => {
@@ -1025,31 +1039,45 @@ export class Viewer {
         row.className = 'rp-outline-row';
         row.style.setProperty('--depth', String(depth));
         row.dataset.path = key;
+        row.dataset.depth = String(depth);
         const go = this.doc.createElement('button');
         go.type = 'button';
         go.className = 'rp-outline-item';
-        go.textContent = item.title;
+        go.tabIndex = -1;
+        go.title = item.title;
+        const title = this.doc.createElement('span');
+        title.className = 'rp-outline-title';
+        title.textContent = item.title;
+        go.append(title);
+        // The page it leads to, seen at the end of the row; its name is its title alone.
+        const n = item.to ? pageNumber(this.pdf, item.to.page) : 0;
+        if (n) {
+          const page = this.doc.createElement('span');
+          page.className = 'rp-outline-page';
+          page.setAttribute('aria-hidden', 'true');
+          page.textContent = String(n);
+          go.append(page);
+        }
         go.disabled = !item.to;
         go.addEventListener('click', () => {
           if (!item.to) return;
           this.goToPlace(item.to);
+          this.rove(go);
           if (this.doc.defaultView?.matchMedia('(max-width: 640px)').matches) this.toggleThumbnails(false);
         });
+        if (item.to) this.outlineEntries.push({ button: go, place: item.to });
         if (item.items.length) {
           const inner = list(item.items, depth + 1, path);
           inner.hidden = depth > 0 && !this.expanded.has(key);
           const toggle = this.doc.createElement('button');
           toggle.type = 'button';
           toggle.className = 'rp-outline-toggle';
+          // Opened and closed with the arrows from the bookmark: one stop of Tab for the whole list.
+          toggle.tabIndex = -1;
           toggle.setAttribute('aria-expanded', String(!inner.hidden));
           toggle.setAttribute('aria-label', fill(this.t.sectionsOf, { title: item.title }));
           toggle.append(icon(this.doc, 'chevronRight', 14));
-          toggle.addEventListener('click', () => {
-            inner.hidden = !inner.hidden;
-            toggle.setAttribute('aria-expanded', String(!inner.hidden));
-            if (inner.hidden) this.expanded.delete(key);
-            else this.expanded.add(key);
-          });
+          toggle.addEventListener('click', () => this.openSection(toggle, toggle.getAttribute('aria-expanded') !== 'true'));
           row.append(toggle, go);
           this.options.decorateOutline?.(row, path, item);
           li.append(row, inner);
@@ -1062,10 +1090,90 @@ export class Viewer {
       });
       return ul;
     };
-    this.outlineList.replaceChildren(
-      ...(items.length ? [list(items, 0, [])] : this.options.panels ? [Object.assign(this.doc.createElement('p'), { className: 'rp-panel-empty', textContent: this.t.noContents })] : []),
-    );
+    const tree = items.length ? list(items, 0, []) : undefined;
+    if (tree) {
+      tree.setAttribute('aria-label', this.t.contents);
+      tree.addEventListener('keydown', (event) => this.outlineKey(event));
+    }
+    this.outlineList.replaceChildren(...(tree ? [tree] : this.options.panels ? [Object.assign(this.doc.createElement('p'), { className: 'rp-panel-empty', textContent: this.t.noContents })] : []));
+    this.outlineAt = undefined;
+    this.followOutline();
+    const first = this.outlineList.querySelector<HTMLButtonElement>('.rp-outline-item:not(:disabled)');
+    if (!this.outlineList.querySelector('.rp-outline-item[tabindex="0"]') && first) first.tabIndex = 0;
     this.showTabs(items.length > 0, files);
+  }
+
+  /** Opens or closes the sections under a bookmark, by its button. */
+  private openSection(toggle: HTMLElement, open: boolean) {
+    const inner = toggle.closest('li')?.querySelector(':scope > ul') as HTMLElement | null;
+    const key = (toggle.closest('.rp-outline-row') as HTMLElement | null)?.dataset.path;
+    if (!inner || key === undefined) return;
+    inner.hidden = !open;
+    toggle.setAttribute('aria-expanded', String(open));
+    if (open) this.expanded.add(key);
+    else this.expanded.delete(key);
+    this.followOutline();
+  }
+
+  /** The one bookmark Tab reaches: the last one gone to, or the section being read. */
+  private rove(to: HTMLElement) {
+    for (const b of this.outlineList.querySelectorAll<HTMLElement>('.rp-outline-item[tabindex="0"]')) b.tabIndex = -1;
+    to.tabIndex = 0;
+  }
+
+  /** The arrows through the bookmarks, as through a tree: up and down, into and out of the sections. Alt is left to the editor. */
+  private outlineKey(event: KeyboardEvent) {
+    const from = (event.target as HTMLElement).closest<HTMLElement>('.rp-outline-item');
+    if (!from || event.altKey || event.ctrlKey || event.metaKey) return;
+    const shown = [...this.outlineList.querySelectorAll<HTMLButtonElement>('.rp-outline-item')].filter((b) => !b.closest('ul[hidden]'));
+    const at = shown.indexOf(from as HTMLButtonElement);
+    const row = from.closest('.rp-outline-row');
+    const toggle = row?.querySelector<HTMLElement>('.rp-outline-toggle');
+    const open = toggle?.getAttribute('aria-expanded') === 'true';
+    let to: HTMLElement | undefined;
+    if (event.key === 'ArrowDown') to = shown[at + 1];
+    else if (event.key === 'ArrowUp') to = shown[at - 1];
+    else if (event.key === 'Home') to = shown[0];
+    else if (event.key === 'End') to = shown.at(-1);
+    else if (event.key === 'ArrowRight' && toggle) {
+      if (!open) this.openSection(toggle, true);
+      else to = shown[at + 1];
+    } else if (event.key === 'ArrowLeft') {
+      if (toggle && open) this.openSection(toggle, false);
+      else to = row?.closest('ul')?.closest('li')?.querySelector<HTMLElement>(':scope > .rp-outline-row .rp-outline-item') ?? undefined;
+    } else return;
+    event.preventDefault();
+    if (!to) return;
+    this.rove(to);
+    to.focus();
+  }
+
+  /** Marks the section being read: the last bookmark whose place is above a third of the view, or the one it is in, when it is closed. */
+  private followOutline() {
+    if (!this.outlineEntries.length) return;
+    const reading = this.scroll.scrollTop + this.scroll.clientHeight / 3;
+    let found: HTMLButtonElement | undefined;
+    for (const { button, place } of this.outlineEntries) {
+      const view = this.views.get(place.page);
+      if (!view) continue;
+      const y = view.el.offsetTop + (place.top === undefined ? 0 : view.geo.toScreen({ x: view.page.box.x, y: place.top }).y);
+      if (y <= reading + 4 && (!found || y >= this.outlineY.get(found)!)) found = button;
+      this.outlineY.set(button, y);
+    }
+    // A section under one closed is shown by the one it is under.
+    while (found?.closest('ul[hidden]')) found = found.closest('ul[hidden]')?.closest('li')?.querySelector<HTMLButtonElement>(':scope > .rp-outline-row .rp-outline-item') ?? undefined;
+    if (found === this.outlineAt) return;
+    this.outlineAt?.removeAttribute('aria-current');
+    this.outlineAt = found;
+    if (!found) return;
+    found.setAttribute('aria-current', 'location');
+    // Kept in sight in the panel, unless someone is going through it with the keyboard.
+    if (!this.outlineEl.hidden && !this.side.hidden && !this.outlineList.contains(this.doc.activeElement)) {
+      this.rove(found);
+      const list = this.outlineEl.getBoundingClientRect();
+      const box = found.getBoundingClientRect();
+      if (box.top < list.top || box.bottom > list.bottom) this.outlineEl.scrollTop += box.top - list.top - list.height / 3;
+    }
   }
 
   /** The files the PDF carries, each to download. */
@@ -1113,6 +1221,7 @@ export class Viewer {
       else break;
     }
     this.setCurrent(found);
+    this.followOutline();
   }
 
   private setCurrent(id: string) {

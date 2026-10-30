@@ -220,6 +220,15 @@ export function createMenuScreen(host: MenuHost): MenuScreen {
       event.preventDefault();
       event.stopPropagation();
       close();
+    } else if (event.key === 'Tab') {
+      // Round the menu: from its last control to its first, and back.
+      const stops = [...screen.querySelectorAll<HTMLElement>('button:not([tabindex="-1"]), [tabindex="0"]')].filter((el) => el.offsetParent !== null);
+      const at = stops.indexOf(doc.activeElement as HTMLElement);
+      const next = event.shiftKey ? (at <= 0 ? stops.at(-1) : undefined) : at === stops.length - 1 || at < 0 ? stops[0] : undefined;
+      if (next) {
+        event.preventDefault();
+        next.focus();
+      }
     } else if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && tabs.includes(doc.activeElement as HTMLButtonElement)) {
       event.preventDefault();
       const at = tabs.indexOf(doc.activeElement as HTMLButtonElement);
@@ -231,15 +240,21 @@ export function createMenuScreen(host: MenuHost): MenuScreen {
   // On the document: in Safari a click does not give a button the focus, which may stay outside the menu.
   doc.addEventListener('keydown', onKey, true);
 
+  /** What is under the menu, kept from the keyboard and from screen readers while it is open, as under any dialog. */
+  let under: HTMLElement[] = [];
   function open(): void {
     build();
     show(0);
     screen.hidden = false;
+    under = [...host.root.children].filter((el): el is HTMLElement => el !== screen && el instanceof HTMLElement && !el.inert);
+    for (const el of under) el.inert = true;
     tabs[0]?.focus();
   }
   function close(): void {
     if (screen.hidden) return;
     screen.hidden = true;
+    for (const el of under) el.inert = false;
+    under = [];
     host.focus();
   }
   return {

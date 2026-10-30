@@ -16,6 +16,7 @@ let locale: 'en' | 'es' = params.get('lang') === 'es' ? 'es' : 'en';
 /** The language chosen in the menu, kept in the address for the page to open in it again. */
 const chosen = (next: 'en' | 'es') => {
   locale = next;
+  document.documentElement.lang = next;
   params.set('lang', next);
   history.replaceState(null, '', `?${params}`);
 };
@@ -23,12 +24,18 @@ if (!params.has('noworker')) usePdfWorker(worker);
 // The folder of pdfjs-dist as Vite serves it while it is developed: its fonts, for PDF/A, and its maps.
 if (import.meta.env.DEV) usePdfAssets(liberation.replace(/standard_fonts\/.*$/, ''));
 const app = document.querySelector<HTMLElement>('#app')!;
+document.documentElement.lang = locale;
+/** The tab says the PDF open, for who has several. */
+const titled = (name?: string) => {
+  document.title = name ? `${name.replace(/\.pdf$/i, '')} · ReboPDF` : 'ReboPDF';
+};
 const collab = params.get('collab');
 const room = params.get('room');
 const name = params.get('name') ?? 'Ana';
 
 if (params.has('viewer')) {
   const pdf = await samplePdf(locale);
+  titled(pdf.name);
   // The viewer alone is mounted again in the language chosen.
   const mount = () =>
     mountViewer(app, {
@@ -46,6 +53,7 @@ if (params.has('viewer')) {
     pdf: params.has('empty') || room ? undefined : await samplePdf(locale),
     locale,
     onLocale: chosen,
+    onChange: (pdf) => titled(pdf.name),
     author: name,
     recognize: recognizeText,
     menu: collab
@@ -72,5 +80,6 @@ if (params.has('viewer')) {
       : [],
   });
   if (collab && room) Object.assign(window, { session: await joinRoom(editor, { url: collab, room, key: params.get('key') ?? '', name }) });
+  titled(editor.pdf?.name);
   Object.assign(window, { editor });
 }

@@ -176,6 +176,18 @@ The first version to go to npm: 0.1.0 never went, and what it has is here.
   `languages: false` to leave it out), the PDF, its history and the page
   in view kept; the viewer alone, when given `setLocale`. The panel of
   the pages, the contents and the files is wider, its thumbnails bigger.
+- **The contents, made better**: each section with its page, the one
+  being read marked (`aria-current="location"`) and kept in sight as the
+  pages scroll, titles across the panel on up to two lines. One stop of
+  Tab, then the arrows, Home and End, right and left to open and close.
+  In the editor, what is done to a bookmark is one button and its menu,
+  in place of six; F2, Delete and Alt with the arrows do it from the
+  keyboard, which stays on the bookmark moved. What does not apply is
+  offered disabled, and is not done.
+- **Accessible as a page**: the viewer says its language on its root
+  (`lang`), the menu keeps the keyboard and screen readers in it while it
+  is open (what is under it is inert), and the playground keeps the
+  language of the page and the name of the PDF in its title.
 
 ### Fixed
 

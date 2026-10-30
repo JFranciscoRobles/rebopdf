@@ -390,6 +390,46 @@ test('a PDF with a password is asked for it, opened, and its pages drawn', async
   expect(pdf.fields.find((f) => f.name === 'client.name')?.value).toBe('Luis');
 });
 
+test('the contents say the page of each section, the one being read, and are gone through with the arrows', async ({ page }) => {
+  await page.getByRole('tab', { name: 'Contents' }).click();
+  const contents = page.getByRole('list', { name: 'Contents' });
+  await expect(contents.getByRole('button', { name: '4. Ownership', exact: true })).toContainText('2');
+  // Above the first section, none is being read.
+  await expect(contents.locator('[aria-current="location"]')).toHaveCount(0);
+  // Read further down: the section marked follows.
+  await page.locator('.rp-scroll').evaluate((el) => {
+    el.scrollTop = el.scrollHeight;
+  });
+  await expect(contents.locator('[aria-current="location"]')).toHaveAttribute('title', 'Signed in agreement');
+  // One stop of Tab, then the arrows.
+  await expect(contents.locator('.rp-outline-item[tabindex="0"]')).toHaveCount(1);
+  await contents.locator('.rp-outline-item[tabindex="0"]').focus();
+  await page.keyboard.press('Home');
+  await expect(contents.getByRole('button', { name: 'The client', exact: true })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(contents.getByRole('button', { name: '1. The work', exact: true })).toBeFocused();
+  await page.keyboard.press('End');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('textbox', { name: 'Page number' })).toHaveValue('2');
+});
+
+test('the page says its language and its PDF, and nothing under the menu is reached while it is open', async ({ page }) => {
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await expect(page).toHaveTitle('Service agreement · ReboPDF');
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  // Tab goes round the menu alone.
+  for (let i = 0; i < 12; i++) {
+    await page.keyboard.press('Tab');
+    expect(await page.evaluate(() => !!document.activeElement?.closest('.rp-ms'))).toBe(true);
+  }
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('tab', { name: 'Language' }).click();
+  await page.getByRole('radio', { name: 'Español' }).click();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'es');
+  await expect(page.locator('.rp-root')).toHaveAttribute('lang', 'es');
+});
+
 test('links lead to their place, and the table of contents to each section', async ({ page }) => {
   await expect(page.getByRole('tab', { name: 'Contents' })).toBeVisible();
   await page.getByRole('tab', { name: 'Contents' }).click();
@@ -788,9 +828,14 @@ test('bookmarks are made, named, moved and taken away; files are attached', asyn
   await name.fill('Firmas');
   await name.press('Enter');
   await expect(panel.getByRole('button', { name: 'Firmas', exact: true })).toBeVisible();
-  // Up, then under the one before it.
-  await panel.getByRole('button', { name: 'Move Firmas up' }).click();
-  await panel.getByRole('button', { name: 'Put Firmas under the one before' }).click();
+  // Up, from its menu, then under the one before it, from the keyboard.
+  await panel.getByRole('button', { name: 'Actions for Firmas' }).click({ force: true });
+  const actions = page.getByRole('menu', { name: 'Actions for Firmas' });
+  await expect(actions.getByRole('menuitem', { name: 'Take Firmas out of the one it is under' })).toHaveAttribute('aria-disabled', 'true');
+  await actions.getByRole('menuitem', { name: 'Move Firmas up' }).click();
+  await expect(panel.getByRole('button', { name: 'Firmas', exact: true })).toBeFocused();
+  await page.keyboard.press('Alt+ArrowRight');
+  await expect(panel.locator('.rp-outline-row[data-depth="1"]').getByRole('button', { name: 'Firmas', exact: true })).toBeFocused();
   const results = await new AxeBuilder({ page }).include('.rp-side').analyze();
   expect(results.violations.map((v) => v.id)).toEqual([]);
   // A file carried.
@@ -807,7 +852,8 @@ test('bookmarks are made, named, moved and taken away; files are attached', asyn
   expect(pdf.attachments?.map((a) => a.name)).toEqual(['cuentas.csv']);
   // Taken away.
   await page.getByRole('tab', { name: 'Contents' }).click();
-  await panel.getByRole('button', { name: 'Remove Firmas' }).click({ force: true });
+  await panel.getByRole('button', { name: 'Firmas', exact: true }).focus();
+  await page.keyboard.press('Delete');
   await expect(panel.getByRole('button', { name: 'Firmas', exact: true })).toHaveCount(0);
 });
 

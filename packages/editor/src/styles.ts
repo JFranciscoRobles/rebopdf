@@ -80,10 +80,13 @@ const CSS = `
 .rp-dialog-check { display: flex; gap: 8px; align-items: flex-start; color: var(--rp-muted); font-size: 12.5px; line-height: 1.4; }
 .rp-dialog-check input { margin-top: 2px; }
 .rp-text-button { display: inline-flex; align-items: center; gap: 6px; width: auto; padding: 0 10px; font-size: 12.5px; }
-.rp-outline-row { position: relative; }
-.rp-outline-tools { display: flex; flex: none; opacity: 0; }
-.rp-outline-row:hover .rp-outline-tools, .rp-outline-row:focus-within .rp-outline-tools { opacity: 1; }
-.rp-outline-tools .rp-button { width: 24px; height: 24px; }
+/* What is done to a bookmark: one button over the end of its row, seen when the row is pointed at or has the focus. */
+.rp-outline-more.rp-button { position: absolute; right: 2px; top: 3px; min-width: 26px; width: 26px; height: 26px; padding: 0; border-radius: 7px; background: var(--rp-chrome); opacity: 0; }
+.rp-outline-more.rp-button:hover { background: var(--rp-down); }
+.rp-outline-row:hover > .rp-outline-more, .rp-outline-row:focus-within > .rp-outline-more, .rp-outline-more[aria-expanded="true"] { opacity: 1; }
+.rp-outline-row:hover > .rp-outline-item .rp-outline-page, .rp-outline-row:focus-within > .rp-outline-item .rp-outline-page { visibility: hidden; }
+.rp-bookmark-menu .rp-button[aria-disabled="true"] { opacity: 0.45; cursor: default; background: none; }
+.rp-bookmark-menu kbd { margin-left: auto; padding-left: 16px; color: var(--rp-muted); font: inherit; font-size: 12px; }
 .rp-outline-name { flex: 1; min-width: 0; height: 28px; font-size: 13px; }
 .rp-file .rp-button { width: 26px; height: 26px; flex: none; }
 .rp-history { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 320px; overflow-y: auto; min-width: 260px; font-size: 12.5px; }
@@ -99,7 +102,7 @@ const CSS = `
 .rp-replies li p { grid-column: 1 / -1; margin: 0; white-space: pre-wrap; }
 .rp-replies time { color: var(--rp-muted); font-size: 11.5px; }
 .rp-replies li .rp-button { width: 24px; height: 24px; }
-@media (pointer: coarse) { .rp-outline-tools { opacity: 1; } }
+@media (pointer: coarse) { .rp-outline-more.rp-button { opacity: 1; } .rp-outline-item .rp-outline-page { visibility: hidden; } }
 .rp-dialog-problem { margin: 0; min-height: 1em; color: #c92a2a; font-size: 13px; }
 .rp-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .rp-upload-preview { display: grid; place-items: center; height: 140px; border: 1px dashed var(--rp-border-strong); border-radius: 10px; background: #fff; }
