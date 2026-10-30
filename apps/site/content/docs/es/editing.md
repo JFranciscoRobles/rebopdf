@@ -42,3 +42,7 @@ const bytes = await savePdf(pdf, { protect: { password: 'abre', permissions: { c
 ```
 
 `ownerPassword` lo abre para todo; si no se da, nadie puede hacer más de lo que permite la contraseña. Un PDF protegido se abre en ReboPDF pidiéndola.
+
+## Más pequeño
+
+Descargar más pequeño (en el menú ⋯) reduce el PDF: sus imágenes no más grandes de lo que las muestran sus páginas, a 150 puntos por pulgada; las fotografías se escriben otra vez como JPEG; y una imagen o una fuente que tenga dos veces se guarda una sola. Cada cosa se cambia solo si así queda más pequeña. En código, `savePdf(pdf, { optimize: { dpi: 150, quality: 0.75 } })`.

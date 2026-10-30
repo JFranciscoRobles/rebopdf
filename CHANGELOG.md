@@ -119,6 +119,12 @@ The first version to go to npm: 0.1.0 never went, and what it has is here.
   authorities sign with. In the editor, Sign digitally has a field for the
   authority (`signing.timestamp`) and a box to keep what checks it; in the
   MCP server, `timestamp`, `long_term` and `trusted`.
+- **Smaller PDFs** (`optimize` of `savePdf`; Download smaller in the editor;
+  `optimize` of `save_pdf`): pictures no bigger than the pages show them
+  (150 dots to the inch, or `dpi`), photographs written again as JPEG at
+  `quality`, the others made smaller without losing more, and streams the
+  file has twice kept once. A test PDF of a photograph went from 2.8 MB to
+  0.6 MB; a book of 36 MB to 20 MB.
 - **Protected by a password** (`protect` of `savePdf`; Download with a
   password… in the editor; `password` of `save_pdf`): encrypted with
   AES-256, with what may be done with it opened (printed, copied, changed).

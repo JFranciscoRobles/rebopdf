@@ -683,3 +683,30 @@ test('a PDF is downloaded with a password, and opens with it alone', async ({ pa
   await expect(openPdf(bytes)).rejects.toThrow();
   expect((await openPdf(bytes, { password: 'abre' })).pages).toHaveLength(2);
 });
+
+test('a PDF with a photograph far bigger than its page is downloaded smaller', async ({ page }) => {
+  const { createRequire } = await import('node:module');
+  const napi = createRequire(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'))('@napi-rs/canvas');
+  const photo = napi.createCanvas(3000, 2000);
+  const c = photo.getContext('2d');
+  for (let i = 0; i < 3000; i++) {
+    c.fillStyle = `hsl(${i % 360} 70% 50%)`;
+    c.fillRect((i * 37) % 3000, (i * 53) % 2000, 40, 40);
+  }
+  const { PDFDocument } = await import('@cantoo/pdf-lib');
+  const doc = await PDFDocument.create();
+  doc.addPage([595, 842]).drawImage(await doc.embedJpg(photo.toBuffer('image/jpeg', 95)), { x: 40, y: 450, width: 515, height: 343 });
+  const heavy = await doc.save();
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'More' }).click();
+  await page.getByRole('menuitem', { name: 'Open a PDF…' }).click();
+  await (await chooser).setFiles({ name: 'Foto.pdf', mimeType: 'application/pdf', buffer: Buffer.from(heavy) });
+  await expect(page.locator('.rp-title')).toHaveText('Foto');
+  const waiting = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'More' }).click();
+  await page.getByRole('menuitem', { name: /Download smaller/ }).click();
+  const bytes = new Uint8Array(Buffer.concat(await (await (await waiting).createReadStream()).toArray()));
+  expect(bytes.length).toBeLessThan(heavy.length / 3);
+  await expect(toast(page)).toHaveText(/^From .+ to .+\.$/);
+  expect((await openPdf(bytes)).pages).toHaveLength(1);
+});

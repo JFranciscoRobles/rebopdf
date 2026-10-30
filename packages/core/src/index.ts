@@ -35,6 +35,7 @@ export { samplePdf, samplePdfBytes } from './sample';
 export { boundsOf, markBounds, NOTE_SIZE, type SaveOptions, savePdf, savesIncrementally, whyNotIncremental } from './save';
 export { overlaps } from './geometry';
 export { png, REDACTED_SCALE, Redactor } from './redact';
+export type { OptimizeOptions } from './optimize';
 export type { Permissions } from './save';
 export { addValidationData, type CheckOptions, checkSignatures, type Revocation, type SignatureCheck, type SignOptions, signPdf, type TimestampAuthority, timestampPdf } from './sign';
 export { authorityAt } from './cms';

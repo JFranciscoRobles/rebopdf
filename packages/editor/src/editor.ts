@@ -1462,6 +1462,7 @@ export class Editor {
       item('print', t.print, '', () => void this.viewer?.print()),
       item('download', t.download, '', () => void this.saveOrDownload()),
       item('flatten', t.downloadFlat, t.downloadFlatHint, () => void this.downloadFlat()),
+      item('download', t.downloadSmaller, t.downloadSmallerHint, () => void this.downloadSmaller()),
       item('lock', t.downloadProtected, t.downloadProtectedHint, () => void this.downloadProtected()),
       item('signature', t.signDigitally, t.signDigitallyHint, () => void this.signDigitally()),
       ...(this.options.files !== false ? [item('layers', t.compareWith, t.compareHint, () => void this.compareWith())] : []),
@@ -1483,6 +1484,21 @@ export class Editor {
 
   private async downloadFlat() {
     await this.saveOrDownload(true);
+  }
+
+  /** The PDF downloaded smaller, and how much. */
+  private async downloadSmaller() {
+    const pdf = this.current;
+    if (!pdf) return;
+    const size = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+    try {
+      const before = (await savePdf(pdf, { font: this.options.font, incremental: false })).length;
+      const bytes = await savePdf(pdf, { font: this.options.font, optimize: true });
+      this.give(bytes, pdf.name);
+      this.toast(fill(this.t.madeSmaller, { before: size(before), after: size(Math.min(before, bytes.length)) }));
+    } catch (error) {
+      this.toast(error instanceof Error ? error.message : String(error));
+    }
   }
 
   /** The PDF downloaded encrypted, opened only by a password asked for. */

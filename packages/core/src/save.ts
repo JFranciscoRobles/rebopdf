@@ -46,6 +46,7 @@ import {
 import { dropAnnotations } from './annotations';
 import { overlaps } from './geometry';
 import { annotate, dropUnreachable, mergeWidget } from './objects';
+import { type OptimizeOptions, optimizeDocument } from './optimize';
 import { writeDocument, writeIncrement } from './writer';
 import { formOf, loadDocument, readField } from './open';
 import { Redactor, unseenOf, writeUnseen } from './redact';
@@ -77,6 +78,12 @@ export interface SaveOptions {
    * left out, no one may. A protected PDF is written whole, not added to.
    */
   protect?: { password: string; ownerPassword?: string; permissions?: Permissions };
+  /**
+   * Made smaller: its pictures no bigger than its pages show them (at 150
+   * dots to the inch, or `dpi`), photographs written again at `quality`, and
+   * what it has twice kept once. An optimized PDF is written whole.
+   */
+  optimize?: boolean | OptimizeOptions;
 }
 
 /** What may be done with a protected PDF opened by its password: all of it, when left out. */
@@ -97,8 +104,8 @@ export function whyNotIncremental(pdf: Pdf): string | undefined {
 }
 
 /** Whether a Pdf is saved by adding to its file: as asked, or, by default, when it is signed. */
-export function savesIncrementally(pdf: Pdf, asked: SaveOptions['incremental'] = 'auto', protect?: SaveOptions['protect']): boolean {
-  const why = protect ? 'It is protected by a password, which the whole file is written with.' : whyNotIncremental(pdf);
+export function savesIncrementally(pdf: Pdf, asked: SaveOptions['incremental'] = 'auto', protect?: SaveOptions['protect'], optimize?: SaveOptions['optimize']): boolean {
+  const why = protect ? 'It is protected by a password, which the whole file is written with.' : optimize ? 'It is made smaller, which the whole file is written again for.' : whyNotIncremental(pdf);
   if (asked === true && why) throw new PdfError('incremental', `It cannot be saved by adding to the file as it came: ${why}`);
   if (asked === false || why) return false;
   if (asked === true) return true;
@@ -113,7 +120,7 @@ export const NOTE_SIZE = 20;
 export async function savePdf(pdf: Pdf, options: SaveOptions = {}): Promise<Uint8Array> {
   const used = [...new Set(pdf.pages.map((page) => page.source))];
   const base = used[0];
-  const incremental = savesIncrementally(pdf, options.incremental, options.protect);
+  const incremental = savesIncrementally(pdf, options.incremental, options.protect, options.optimize);
   const docs = new Map<string, PDFDocument>();
   for (const source of used) docs.set(source, await loadDocument(pdf.sources[source], undefined, incremental));
   const doc = docs.get(base)!;
@@ -198,6 +205,7 @@ export async function savePdf(pdf: Pdf, options: SaveOptions = {}): Promise<Uint
   doc.setModificationDate(new Date());
   if (pdf.info.title && doc.getTitle() !== pdf.info.title) doc.setTitle(pdf.info.title);
   dropUnreachable(doc, gone);
+  if (options.optimize) await optimizeDocument(doc, options.optimize === true ? {} : options.optimize);
   if (options.protect) {
     const { password, ownerPassword, permissions } = options.protect;
     const allowed = { printing: 'highResolution' as const, copying: true, modifying: true, annotating: true, fillingForms: true, contentAccessibility: true, documentAssembly: true, ...permissions };
