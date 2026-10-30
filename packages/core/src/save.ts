@@ -42,13 +42,16 @@ import {
   stroke,
   degrees,
 } from '@cantoo/pdf-lib';
-import { formOf, loadDocument } from './open';
+import { formOf, loadDocument, OBJECTS_AT_ONCE } from './open';
 import type { Color, Field, HighlightMark, InkMark, Mark, NoteMark, Pdf, Point, Rect, SignatureMark, TextMark } from './types';
 
 export interface SaveOptions {
   /** Draws fields and marks into the pages, so that they cannot be changed after. */
   flatten?: boolean;
 }
+
+/** How many objects a PDF has at most to be written with them packed in streams. */
+const PACKED_AT_MOST = 4000;
 
 /** The size of the icon of a note, in points. */
 export const NOTE_SIZE = 20;
@@ -97,7 +100,10 @@ export async function savePdf(pdf: Pdf, options: SaveOptions = {}): Promise<Uint
   doc.setModificationDate(new Date());
   if (pdf.info.title) doc.setTitle(pdf.info.title);
   dropUnreachable(doc, gone);
-  return doc.save();
+  // Objects packed in streams make a smaller file, but pdf-lib packs them in a time that grows with the square of
+  // how many there are: a big PDF is written without them, a hundred times faster and a sixth bigger.
+  const many = doc.context.enumerateIndirectObjects().length > PACKED_AT_MOST;
+  return doc.save({ objectsPerTick: OBJECTS_AT_ONCE, useObjectStreams: !many });
 }
 
 const INHERITED = ['Resources', 'MediaBox', 'CropBox', 'Rotate'].map((key) => PDFName.of(key));

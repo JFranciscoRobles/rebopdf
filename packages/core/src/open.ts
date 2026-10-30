@@ -4,6 +4,9 @@
 import { PDFCheckBox, PDFDocument, type PDFField, PDFDropdown, PDFHexString, PDFName, PDFOptionList, PDFRadioGroup, type PDFRef, PDFString, PDFTextField } from '@cantoo/pdf-lib';
 import { type Field, type Page, type Pdf, PdfError, type Rect } from './types';
 
+/** How many objects pdf-lib reads or writes before it lets the page answer. */
+export const OBJECTS_AT_ONCE = 1500;
+
 let counter = 0;
 /** An id not used before in this run. */
 export const uid = (prefix: string) => `${prefix}${Date.now().toString(36).slice(-4)}${(counter++).toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -19,7 +22,8 @@ export interface OpenOptions {
 export async function loadDocument(bytes: Uint8Array, password?: string): Promise<PDFDocument> {
   if (!bytes.length) throw new PdfError('empty', 'The file is empty.');
   try {
-    return await PDFDocument.load(bytes, { password, updateMetadata: false });
+    // Read in batches big enough not to be slow (pdf-lib waits between every hundred objects), small enough for a page to keep answering.
+    return await PDFDocument.load(bytes, { password, updateMetadata: false, parseSpeed: OBJECTS_AT_ONCE });
   } catch (error) {
     const text = error instanceof Error ? `${error.name} ${error.message}` : String(error);
     if (/encrypt/i.test(text)) throw new PdfError('encrypted', password ? 'The password is not the one of this PDF.' : 'This PDF is protected by a password.');
