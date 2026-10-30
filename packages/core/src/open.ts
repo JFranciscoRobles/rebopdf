@@ -17,7 +17,8 @@ import {
   PDFDict,
 } from '@cantoo/pdf-lib';
 import { dateOf, takeMarks } from './annotations';
-import { dropUnreachable, OBJECTS_AT_ONCE, writeDocument } from './objects';
+import { dropUnreachable, OBJECTS_AT_ONCE } from './objects';
+import { writeDocument } from './writer';
 import { type Field, type Page, type Pdf, PdfError, type Rect, type Signature } from './types';
 
 let counter = 0;

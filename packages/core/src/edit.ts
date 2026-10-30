@@ -5,6 +5,7 @@
 import { PDFDocument } from '@cantoo/pdf-lib';
 import { openPdf, uid } from './open';
 import { type Field, type FieldKind, type Mark, type MarkPatch, type NewMark, type Page, type Pdf, PdfError, type Rect, type Word } from './types';
+import { writeDocument } from './writer';
 
 /** The page of this id. */
 export const pageById = (pdf: Pdf, id: string): Page | undefined => pdf.pages.find((page) => page.id === id);
@@ -109,7 +110,7 @@ export async function insertBlankPage(pdf: Pdf, at = pdf.pages.length, size?: { 
   const doc = await PDFDocument.create();
   doc.addPage([width, height]);
   doc.setProducer('ReboPDF');
-  return insertPdf(pdf, await openPdf(await doc.save()), at);
+  return insertPdf(pdf, await openPdf(await writeDocument(doc)), at);
 }
 
 /** A PDF of these pages alone, in the order they are in, with their fields and marks. */

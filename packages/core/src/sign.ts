@@ -17,6 +17,7 @@ import { annotate } from './objects';
 import { formOf, loadDocument } from './open';
 import { type SaveOptions, savePdf } from './save';
 import { type Pdf, PdfError, type Rect, type Signature } from './types';
+import { writeIncrement } from './writer';
 
 type Forge = typeof forgeType;
 
@@ -187,7 +188,7 @@ export async function signPdf(pdf: Pdf, options: SignOptions): Promise<Uint8Arra
   // The PDF has signatures, and is to be changed only by adding to it.
   form.acroForm.dict.set(PDFName.of('SigFlags'), PDFNumber.of(3));
 
-  const bytes = new Uint8Array(await doc.save({ useObjectStreams: false }));
+  const bytes = await writeIncrement(doc);
 
   // The bytes signed: all but the room for the signature.
   const file = binary(bytes);

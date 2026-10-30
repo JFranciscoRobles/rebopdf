@@ -8,6 +8,7 @@ import { mergeWidget } from './objects';
 import { openPdf } from './open';
 import { wrap } from './save';
 import type { Pdf } from './types';
+import { writeDocument } from './writer';
 
 const TEXT = {
   en: {
@@ -223,7 +224,7 @@ export async function samplePdfBytes(locale: 'en' | 'es' = 'en'): Promise<Uint8A
   context.assign(root, context.obj({ Type: 'Outlines', First: refs[0], Last: refs.at(-1)!, Count: refs.length }));
   doc.catalog.set(PDFName.of('Outlines'), root);
 
-  return doc.save();
+  return writeDocument(doc);
 }
 
 /** The sample PDF, opened. */

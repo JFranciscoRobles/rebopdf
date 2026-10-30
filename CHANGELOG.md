@@ -101,9 +101,23 @@ The first version to go to npm: 0.1.0 never went, and what it has is here.
 - Saved by adding to the file, only what changed is written: the fields
   that hold what they held, and what the file says of itself, stay as they
   were.
+- **ReboPDF writes its files itself**: the whole file with its objects
+  packed in streams, in a time that grows as they do (pdf-lib's grows with
+  their square: big PDFs were written unpacked, a sixth bigger); and what
+  changed, added after a file, in a table of places or a stream as the file
+  has its own. pdf-lib still reads PDFs and holds their objects.
+- Recognizing text reads again, each on its own, the strips of a page with
+  ink and no word read: a big title the layout of the whole page leaves
+  out, as under a dark band, is read.
 
 ### Fixed
 
+- A form filled after it was signed is classified as form filling by
+  readers of signatures (pyHanko), not as any other change: the fields
+  ReboPDF makes are one object with their widget, and a note put on a page
+  no longer changes what the page draws.
+- A menu closed as soon as it opened kept closing every pop-up opened
+  after it on its first click: Sign digitally, among others, did nothing.
 - A signature field, and a button, were taken out of the form when the PDF
   was saved: only the fields the engine fills are now.
 

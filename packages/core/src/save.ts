@@ -45,7 +45,8 @@ import {
 } from '@cantoo/pdf-lib';
 import { dropAnnotations } from './annotations';
 import { overlaps } from './geometry';
-import { annotate, dropUnreachable, mergeWidget, OBJECTS_AT_ONCE, writeDocument } from './objects';
+import { annotate, dropUnreachable, mergeWidget } from './objects';
+import { writeDocument, writeIncrement } from './writer';
 import { formOf, loadDocument, readField } from './open';
 import { Redactor, unseenOf, writeUnseen } from './redact';
 import { type Color, type Field, type HighlightMark, type InkMark, type Mark, type NoteMark, type Pdf, PdfError, type Point, type Rect, type SignatureMark, type TextMark } from './types';
@@ -175,8 +176,7 @@ export async function savePdf(pdf: Pdf, options: SaveOptions = {}): Promise<Uint
     const snapshot = (doc.context as unknown as { snapshot?: { changedObjects: Set<number> } }).snapshot;
     const ref = doc.context.trailerInfo.Root;
     if (snapshot && ref instanceof PDFRef && doc.catalog.toString() === catalog) snapshot.changedObjects.delete(ref.objectNumber);
-    // Each object as it is, not packed: as readers of signatures read what was added, object by object.
-    return doc.save({ objectsPerTick: OBJECTS_AT_ONCE, useObjectStreams: false });
+    return writeIncrement(doc);
   }
   doc.setProducer('ReboPDF');
   doc.setModificationDate(new Date());
