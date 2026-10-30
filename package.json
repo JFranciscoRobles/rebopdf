@@ -1,6 +1,6 @@
 {
   "name": "rebopdf",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "PDFs in the browser and in your application: read, search, annotate, fill forms, sign, and put pages in order, saved as a PDF any reader opens.",
   "license": "MIT",
   "private": true,

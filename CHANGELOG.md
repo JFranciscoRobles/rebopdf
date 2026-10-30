@@ -4,6 +4,18 @@ Every package of ReboPDF is released at the same version. Before 1.0, a
 minor version (0.x.0) may change the API; such changes are listed under
 **Changed** with what to do about them.
 
+## 0.2.1 — 2026-10-30
+
+### Fixed
+
+- node-forge 1.4.2 (from 1.4.0), which `npm audit` asked for:
+  [GHSA-86w9-cpqp-85rv](https://github.com/advisories/GHSA-86w9-cpqp-85rv),
+  RSA PKCS#1 v1.5 signatures checked with extra elements in their digest
+  taken as good. ReboPDF never checked a signature with node-forge (it
+  checks them with WebCrypto, and signs with node-forge), so no signature
+  it said holds did not; an application that installs it is no longer
+  told otherwise.
+
 ## 0.2.0 — 2026-10-30
 
 The first version to go to npm: 0.1.0 never went, and what it has is here.

@@ -1,6 +1,6 @@
 {
   "name": "@rebopdf/ocr",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "The text of scanned pages recognized, with Tesseract: found, selected, blacked out and written unseen over the pages, as a scanner that reads them does.",
   "license": "MIT",
   "private": true,

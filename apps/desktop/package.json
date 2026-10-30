@@ -1,6 +1,6 @@
 {
   "name": "@rebopdf/desktop",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "ReboPDF as a desktop application with Tauri: a window for each PDF, saved to its file (after its signature, when it is signed), native menus, PDFs opened from the Finder or the Explorer.",
   "license": "MIT",
   "private": true,

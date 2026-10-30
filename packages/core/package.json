@@ -1,6 +1,6 @@
 {
   "name": "@rebopdf/core",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "The engine: a PDF opened as its pages, its form fields and what is put on it (highlights, notes, ink, text, signatures), what is done to it (pages turned, taken out, put in order, joined), its text found, and the PDF saved. No DOM.",
   "license": "MIT",
   "private": true,
@@ -11,7 +11,7 @@
   "dependencies": {
     "@cantoo/fontkit": "^2.0.12",
     "@cantoo/pdf-lib": "^2.11.1",
-    "node-forge": "1.4.0",
+    "node-forge": "1.4.2",
     "pdfjs-dist": "6.4.299"
   },
   "scripts": {
